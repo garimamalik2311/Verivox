@@ -15,3 +15,4 @@ data/processed/
 *.flac
 *.ogg
 models/*.json
+!data/WhatsApp*.ogg
