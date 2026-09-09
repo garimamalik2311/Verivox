@@ -75,6 +75,51 @@ class VoiceActivityDetector:
 
         return np.concatenate(speech_frames)
 
+    def filter_speech_with_origins(self, audio: np.ndarray, start_sample: int = 0):
+        """
+        Same as filter_speech(), but also tracks WHERE each kept sample
+        originally came from in the input audio. This is what lets
+        downstream code (window_accumulator, pipeline) recover a real
+        timestamp for each window later, instead of losing timing
+        information when speech frames get concatenated across silence
+        gaps.
+
+        Args:
+            audio: 1D float32 array, any length
+            start_sample: absolute sample index this `audio` array begins
+                at (0 for a single file; running total for a live stream
+                made of many chunks)
+
+        Returns:
+            (speech_audio, origin_samples) — two 1D arrays of equal length.
+            speech_audio[i] is a kept sample; origin_samples[i] is the
+            absolute sample index (relative to the very start of the
+            recording/stream) that speech_audio[i] came from. Dividing
+            origin_samples[i] by SAMPLE_RATE gives a timestamp in seconds
+            from the start of the recording.
+        """
+        speech_frames = []
+        origin_frames = []
+        n_frames = len(audio) // VAD_FRAME_SAMPLES
+
+        for i in range(n_frames):
+            frame_start = i * VAD_FRAME_SAMPLES
+            frame_end = frame_start + VAD_FRAME_SAMPLES
+            frame = audio[frame_start:frame_end]
+            if self.is_speech(frame):
+                speech_frames.append(frame)
+                # every sample in this frame originated at consecutive
+                # absolute positions starting at start_sample + frame_start
+                origin_start = start_sample + frame_start
+                origin_frames.append(
+                    np.arange(origin_start, origin_start + VAD_FRAME_SAMPLES, dtype=np.int64)
+                )
+
+        if not speech_frames:
+            return np.array([], dtype=np.float32), np.array([], dtype=np.int64)
+
+        return np.concatenate(speech_frames), np.concatenate(origin_frames)
+
 
 if __name__ == "__main__":
     # Manual test with synthetic audio: silence should be filtered out

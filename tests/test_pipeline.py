@@ -92,3 +92,45 @@ def test_mock_extract_features_output_shape():
     features = mock_extract_features(valid)
     assert features.shape == (30,)
     assert features.dtype == np.float32
+
+
+def test_vad_preserves_original_positions():
+    """filter_speech_with_origins should report each kept sample's true
+    original position, not just its position in the concatenated output."""
+    vad = VoiceActivityDetector()
+    tone = (0.3 * np.sin(2*np.pi*180*np.arange(SAMPLE_RATE)/SAMPLE_RATE)).astype(np.float32)
+    speech_only, origins = vad.filter_speech_with_origins(tone, start_sample=0)
+    assert len(speech_only) == len(origins)
+    if len(origins) > 0:
+        # origins must be non-decreasing (frames stay in original order)
+        assert np.all(np.diff(origins) >= 0)
+        # first origin should be at or near the very start
+        assert origins[0] < VAD_FRAME_SAMPLES
+
+
+def test_window_timestamps_skip_silence_gap():
+    """A window created after a silence gap must report a timestamp that
+    accounts for the gap, not just 'next sample after the last one kept'."""
+    vad = VoiceActivityDetector()
+
+    def tone(duration_sec):
+        n = int(SAMPLE_RATE * duration_sec)
+        t = np.arange(n) / SAMPLE_RATE
+        return (0.3*np.sin(2*np.pi*180*t) + 0.05*np.random.randn(n)).astype(np.float32)
+
+    speech1 = tone(1.0)
+    silence = np.zeros(int(SAMPLE_RATE * 3.0), dtype=np.float32)
+    speech2 = tone(1.5)
+    audio = np.concatenate([speech1, silence, speech2])
+
+    speech_only, origins = vad.filter_speech_with_origins(audio, start_sample=0)
+    acc = WindowAccumulator()
+    windows = acc.push_with_timestamps(speech_only, origins)
+
+    assert len(windows) >= 2
+    timestamps = [ts for _, ts in windows]
+    # timestamps must be non-decreasing
+    assert timestamps == sorted(timestamps)
+    # at least one window must land after the 3-second silence gap
+    # (i.e. its timestamp should be well past where speech1 alone would end)
+    assert max(timestamps) > 3.0

@@ -10,7 +10,7 @@ speech in -> clean overlapping windows out.
 
 import numpy as np
 
-from config import WINDOW_SIZE_SAMPLES, WINDOW_STRIDE_SAMPLES
+from config import WINDOW_SIZE_SAMPLES, WINDOW_STRIDE_SAMPLES, SAMPLE_RATE
 
 
 class WindowAccumulator:
@@ -26,6 +26,7 @@ class WindowAccumulator:
         self.window_size = window_size
         self.stride = stride
         self._buffer = np.array([], dtype=np.float32)
+        self._origin_buffer = np.array([], dtype=np.int64)
 
     def push(self, audio_chunk: np.ndarray) -> list[np.ndarray]:
         """
@@ -50,9 +51,43 @@ class WindowAccumulator:
 
         return windows
 
+    def push_with_timestamps(self, audio_chunk: np.ndarray, origin_samples_chunk: np.ndarray):
+        """
+        Same as push(), but also carries each sample's ORIGINAL position
+        (from vad.filter_speech_with_origins) through the buffer, so every
+        emitted window can report where in the real recording/call it
+        actually came from — even if VAD dropped silence in between.
+
+        Args:
+            audio_chunk: 1D float32 array of new VAD-filtered speech samples
+            origin_samples_chunk: 1D int64 array, same length as audio_chunk,
+                giving each sample's absolute original sample index
+
+        Returns:
+            List of (window, window_timestamp_sec) tuples. window_timestamp_sec
+            is the timestamp, in seconds from the start of the recording/call,
+            of the FIRST sample in that window — this is the number you hand
+            to Sprint 3 alongside window_id so they can say "HIGH RISK at
+            14:32:08" instead of only "HIGH RISK after speech sample #X".
+        """
+        self._buffer = np.concatenate([self._buffer, audio_chunk])
+        self._origin_buffer = np.concatenate([self._origin_buffer, origin_samples_chunk])
+        windows = []
+
+        while len(self._buffer) >= self.window_size:
+            window = self._buffer[: self.window_size].copy()
+            window_start_origin_sample = self._origin_buffer[0]
+            window_timestamp_sec = float(window_start_origin_sample) / SAMPLE_RATE
+            windows.append((window, window_timestamp_sec))
+            self._buffer = self._buffer[self.stride:]
+            self._origin_buffer = self._origin_buffer[self.stride:]
+
+        return windows
+
     def reset(self):
         """Clear the buffer, e.g. after a period of silence/call end."""
         self._buffer = np.array([], dtype=np.float32)
+        self._origin_buffer = np.array([], dtype=np.int64)
 
 
 if __name__ == "__main__":
