@@ -1,6 +1,18 @@
-venv/
+.venv/
+env/
 __pycache__/
-*.pyc
-data/*.wav
-data/*.mp3
-.DS_Store
+*.py[cod]
+*$py.class
+*.so
+*.dylib
+
+# Audio and array artifacts (do not push to GitHub)
+data/raw/
+data/processed/
+*.npy
+*.wav
+*.mp3
+*.flac
+*.ogg
+models/*.json
+!data/WhatsApp*.ogg
