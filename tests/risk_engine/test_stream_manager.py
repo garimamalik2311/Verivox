@@ -123,3 +123,38 @@ def test_remove_unknown_stream_is_safe():
     manager.remove_stream("does_not_exist")
 
     assert manager.active_streams() == []
+def test_interleaved_streams_remain_independent():
+    manager = StreamManager()
+
+    sequence = [
+        ("call_001", 1, 0.82),
+        ("call_002", 1, 0.20),
+        ("call_001", 2, 0.86),
+        ("call_002", 2, 0.25),
+        ("call_001", 3, 0.91),
+        ("call_002", 3, 0.15),
+        ("call_001", 4, 0.88),
+        ("call_002", 4, 0.18),
+    ]
+
+    results = {}
+
+    for stream_id, window_id, probability in sequence:
+        results[(stream_id, window_id)] = manager.update(
+            make_prediction(stream_id, window_id, probability)
+        )
+
+    # call_001 receives four persistent high predictions.
+    high_result = results[("call_001", 4)]
+
+    assert high_result.risk_level == RiskLevel.HIGH
+    assert high_result.consecutive_flags == 4
+    assert high_result.alert_triggered is True
+
+    # call_002 remains low throughout and is unaffected by call_001.
+    low_result = results[("call_002", 4)]
+
+    assert low_result.risk_level == RiskLevel.LOW
+    assert low_result.consecutive_flags == 0
+    assert low_result.alert_triggered is False
+    assert low_result.rolling_score < 0.50
