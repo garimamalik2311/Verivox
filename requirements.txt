@@ -1,6 +1,22 @@
-sounddevice==0.4.6
-librosa==0.10.1
-webrtcvad==2.0.10
-numpy==1.26.4
-scipy==1.11.4
-soundfile==0.12.1
+# Audio I/O & DSP Core
+sounddevice==0.5.6
+librosa==0.11.0
+soundfile==0.14.0
+scipy==1.17.1
+numpy==2.4.6
+webrtcvad-wheels==2.0.14
+
+# Dataset Download & Streaming
+datasets==5.0.1
+huggingface-hub==1.30.0
+
+# Data Indexing & Validation Splitting
+pandas==3.0.5
+scikit-learn==1.9.0
+tqdm==4.70.0
+
+# Testing & Benchmarking
+pytest==9.1.1
+
+# Classifier Training
+xgboost>=2.0.0
