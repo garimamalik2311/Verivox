@@ -24,6 +24,10 @@ class RiskEngine:
         self.state_machine = RiskStateMachine()
         self.alert_manager = AlertManager()
 
+        if not 0.0 <= flag_threshold <= 1.0:
+            raise ValueError("flag_threshold must be between 0 and 1")
+        if required_consecutive_flags <= 0:
+            raise ValueError("required_consecutive_flags must be greater than 0")
         self.flag_threshold = flag_threshold
         self.required_consecutive_flags = required_consecutive_flags
 
