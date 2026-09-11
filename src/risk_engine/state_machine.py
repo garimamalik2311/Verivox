@@ -16,18 +16,22 @@ class RiskStateMachine:
     def state(self) -> RiskLevel:
         return self._state
 
-    def update(self, rolling_score: float) -> RiskLevel:
+    def update(
+        self,
+        rolling_score: float,
+        allow_high: bool = True,
+    ) -> RiskLevel:
         if not 0.0 <= rolling_score <= 1.0:
             raise ValueError("rolling_score must be between 0 and 1")
 
         if self._state == RiskLevel.LOW:
-            if rolling_score >= HIGH_ENTER_THRESHOLD:
+            if allow_high and rolling_score >= HIGH_ENTER_THRESHOLD:
                 self._state = RiskLevel.HIGH
             elif rolling_score >= MEDIUM_THRESHOLD:
                 self._state = RiskLevel.MEDIUM
 
         elif self._state == RiskLevel.MEDIUM:
-            if rolling_score >= HIGH_ENTER_THRESHOLD:
+            if allow_high and rolling_score >= HIGH_ENTER_THRESHOLD:
                 self._state = RiskLevel.HIGH
             elif rolling_score < MEDIUM_THRESHOLD:
                 self._state = RiskLevel.LOW
