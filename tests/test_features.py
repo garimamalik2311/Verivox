@@ -18,8 +18,7 @@ def test_feature_extraction_latency():
     avg_latency_ms = ((time.perf_counter() - start) / iterations) * 1000.0
 
     print(f"\nMean extraction latency: {avg_latency_ms:.2f} ms")
-    # Calibrated to 15.0 ms to account for local WSL virtualization overhead
-    assert avg_latency_ms < 15.0, f"Extraction exceeded local SLA of 15 ms: {avg_latency_ms:.2f} ms"
+    assert avg_latency_ms < 5.0, f"Extraction exceeded 5 ms: {avg_latency_ms:.2f} ms"
 
 if __name__ == "__main__":
     test_feature_extraction_latency()
