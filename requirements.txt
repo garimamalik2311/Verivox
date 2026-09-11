@@ -36,3 +36,8 @@ typing_extensions==4.16.0
 urllib3==2.7.0
 webrtcvad==2.0.10
 setuptools<82.0.0
+# WebSocket server/client
+fastapi==0.141.1
+uvicorn==0.52.4
+websockets==17.1
+httpx2==2.12.0
