@@ -26,9 +26,9 @@ class RiskResult(BaseModel):
     window_id: int
     timestamp: float
 
-    ai_probability: float
-    rolling_score: float
-    consecutive_flags: int
+    ai_probability: float = Field(ge=0.0, le=1.0)
+    rolling_score: float = Field(ge=0.0, le=1.0)
+    consecutive_flags: int = Field(ge=0)
 
     risk_level: RiskLevel
 
