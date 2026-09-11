@@ -116,6 +116,60 @@ def test_duplicate_window_is_rejected():
     with pytest.raises(ValueError):
         engine.update(make_prediction(1, 0.6))
 
+def test_timestamp_gap_does_not_insert_zero_probability():
+    engine = RiskEngine()
+
+    first = ModelPrediction(
+        stream_id="call_001",
+        window_id=1,
+        timestamp=1000.5,
+        ai_probability=0.85,
+        model_version="xgb_v1",
+    )
+
+    second = ModelPrediction(
+        stream_id="call_001",
+        window_id=2,
+        timestamp=1001.0,
+        ai_probability=0.86,
+        model_version="xgb_v1",
+    )
+
+    third = ModelPrediction(
+        stream_id="call_001",
+        window_id=3,
+        timestamp=1005.0,
+        ai_probability=0.87,
+        model_version="xgb_v1",
+    )
+
+    engine.update(first)
+    engine.update(second)
+    result = engine.update(third)
+
+    # The timestamp gap must not create a fake zero-probability
+    # prediction in the rolling buffer.
+    assert len(engine.buffer) == 3
+    assert result.rolling_score == pytest.approx(
+        (0.85 + 0.86 + 0.87) / 3
+    )
+
+
+def test_timestamp_is_preserved_in_risk_result():
+    engine = RiskEngine()
+
+    prediction = ModelPrediction(
+        stream_id="call_001",
+        window_id=1,
+        timestamp=1725890000.5,
+        ai_probability=0.87,
+        model_version="xgb_v1",
+    )
+
+    result = engine.update(prediction)
+
+    assert result.timestamp == prediction.timestamp
+
 
 def test_reset():
     engine = RiskEngine()
