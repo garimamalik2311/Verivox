@@ -34,7 +34,6 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
-    confusion_matrix,
 )
 
 PROCESSED = Path("data/processed")
@@ -51,16 +50,22 @@ def load_data():
     y_train = np.load(PROCESSED / "y_train.npy")
     X_val = np.load(PROCESSED / "X_val.npy")
     y_val = np.load(PROCESSED / "y_val.npy")
+    X_test = np.load(PROCESSED / "X_test.npy")
+    y_test = np.load(PROCESSED / "y_test.npy")
 
     print(f"X_train: {X_train.shape}  {X_train.dtype}")
     print(f"y_train: {y_train.shape}  {y_train.dtype}")
     print(f"X_val  : {X_val.shape}    {X_val.dtype}")
     print(f"y_val  : {y_val.shape}    {y_val.dtype}")
+    print(f"X_test : {X_test.shape}    {X_test.dtype}")
+    print(f"y_test : {y_test.shape}    {y_test.dtype}")
     print(f"\nNaN in train: {np.isnan(X_train).any()}")
     print(f"NaN in val  : {np.isnan(X_val).any()}")
+    print(f"NaN in test : {np.isnan(X_test).any()}")
     print(f"\nTrain label counts: {np.bincount(y_train.astype(int))}")
     print(f"Val   label counts: {np.bincount(y_val.astype(int))}")
-    return X_train, y_train, X_val, y_val
+    print(f"Test  label counts: {np.bincount(y_test.astype(int))}")
+    return X_train, y_train, X_val, y_val, X_test, y_test
 
 
 # ---------------------------------------------------------------- 2. EDA
@@ -69,18 +74,15 @@ def eda(X_train, y_train):
     print("2. EDA")
     print("=" * 70)
 
-    # Class balance
     counts = np.bincount(y_train.astype(int))
     print(f"Class balance: real={counts[0]}  fake={counts[1]}  "
           f"ratio={counts[0] / counts[1]:.2f}")
 
-    # Feature variance — look for dead features
     var = X_train.var(axis=0)
     dead = np.where(var < 1e-6)[0]
     print(f"\nFeatures with ~zero variance: {len(dead)} {dead.tolist()}")
     print(f"Feature variance range: [{var.min():.4e}, {var.max():.4e}]")
 
-    # Simple correlation check
     corr = np.corrcoef(X_train.T)
     high_corr = []
     for i in range(corr.shape[0]):
@@ -91,7 +93,6 @@ def eda(X_train, y_train):
     for pair in high_corr[:10]:
         print(f"  features {pair[0]} & {pair[1]}: r={pair[2]}")
 
-    # Save a quick feature-distribution figure
     fig, axes = plt.subplots(6, 5, figsize=(18, 14))
     for i, ax in enumerate(axes.flat):
         if i >= X_train.shape[1]:
@@ -231,7 +232,7 @@ def compare_models(X_train, y_train, X_val, y_val):
 
 # ---------------------------------------------------------------- MAIN
 def main():
-    X_train, y_train, X_val, y_val = load_data()
+    X_train, y_train, X_val, y_val, X_test, y_test = load_data()
     eda(X_train, y_train)
     xgboost_baseline(X_train, y_train, X_val, y_val)
 
@@ -240,6 +241,20 @@ def main():
     print(f"\nTuned model on val:")
     print(classification_report(y_val, tuned.predict(X_val), digits=4))
     print(f"Val ROC-AUC: {roc_auc_score(y_val, probs):.4f}")
+
+    # Evaluate tuned model on the test holdout
+    probs_test = tuned.predict_proba(X_test)[:, 1]
+    print("\n" + "=" * 70)
+    print("TUNED MODEL ON TEST HOLDOUT")
+    print("=" * 70)
+    print(classification_report(y_test, tuned.predict(X_test), digits=4))
+    print(f"Test ROC-AUC: {roc_auc_score(y_test, probs_test):.4f}")
+
+    # Save test probabilities for Sprint 2b calibration
+    np.save(REPORTS / "test_probs.npy", probs_test)
+    np.save(REPORTS / "test_labels.npy", y_test)
+    print(f"\nSaved {REPORTS / 'test_probs.npy'}")
+    print(f"Saved {REPORTS / 'test_labels.npy'}")
 
     # Save the tuned model for Sprint 2b
     joblib.dump(tuned, REPORTS / "xgboost_tuned.joblib")
