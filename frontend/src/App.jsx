@@ -100,7 +100,6 @@ export default function App() {
   const [windowId, setWindowId] = useState(43)
   const [isConnected, setIsConnected] = useState(false)
   const [showInspector, setShowInspector] = useState(false)
-  const [activeTab, setActiveTab] = useState('telemetry')
   const wsRef = useRef(null)
 
   const selected = streams[activeStreamId] || streams['call_001']
@@ -223,353 +222,321 @@ export default function App() {
     setWindowId((prev) => prev + 1)
   }
 
-  const currentResult = streams[activeStreamId] || {
-    stream_id: activeStreamId,
-    rolling_score: 0.0,
-    consecutive_flags: 0,
-    risk_level: 'LOW',
-    alert_triggered: false,
-    alert_reason: null,
-    speech_detected: true,
-    ai_probability: 0.0,
-    model_version: 'xgb_v1',
-    feature_latency_ms: 3.8,
-    vector_dim: 30
-  };
-
-  const getRiskBadgeColor = (level) => {
-    if (level === 'HIGH') return 'bg-rose-500/20 text-rose-400 border border-rose-500/60 shadow-lg shadow-rose-900/40 animate-pulse';
-    if (level === 'MEDIUM') return 'bg-amber-500/20 text-amber-400 border border-amber-500/60 shadow-md shadow-amber-900/20';
-    return 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/60';
-  };
-
   return (
-    <div className="min-h-screen bg-[#07090e] text-slate-100 p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black">
-      
-      {/* Top Header Navigation */}
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 border-b border-slate-800/80 pb-5 gap-4">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2.5">
-              VeriVox <span className="bg-gradient-to-r from-cyan-400 via-indigo-400 to-purple-400 bg-clip-text text-transparent font-extrabold text-lg">Neural Voiceguard</span>
-            </h1>
-            <p className="text-xs text-slate-400 font-mono mt-0.5">Real-Time 30-Dim Feature Pipeline &middot; XGBoost Sub-5ms Telemetry Engine</p>
+    <main className="min-h-screen bg-[#07090e] text-slate-100 font-sans">
+      <header className="border-b border-slate-800/80 bg-[#0c1017]/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-cyan-400 text-slate-950 font-bold">
+              <ShieldCheck size={22} />
+            </div>
+            <div>
+              <p className="text-lg font-bold tracking-tight text-white">VeriVox <span className="text-xs text-cyan-400 font-mono font-normal">Neural Guard</span></p>
+              <p className="text-xs text-slate-400 font-mono">Voice safety monitor</p>
+            </div>
           </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex bg-[#0c1017] p-1 rounded-xl border border-slate-800">
+          <nav className="flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-[#07090e] p-1" aria-label="Main navigation">
+            {[
+              { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+              { id: 'history', label: 'History', icon: History },
+              { id: 'how', label: 'How it works', icon: CircleHelp },
+            ].map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActivePage(id)}
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                  activePage === id ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/20' : 'text-slate-400 hover:bg-[#121824] hover:text-white'
+                }`}
+              >
+                <Icon size={15} />
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="flex items-center gap-3">
             <button 
-              onClick={() => setActiveTab('telemetry')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'telemetry' ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40' : 'text-slate-400 hover:text-white'}`}
+              onClick={() => setShowInspector(!showInspector)}
+              className="text-xs bg-[#121824] hover:bg-slate-800 text-cyan-300 px-3 py-1.5 rounded-lg border border-cyan-500/30 transition font-mono"
             >
-              Live Telemetry
+              {showInspector ? 'Hide Contract' : '</> JSON Payload'}
             </button>
-            <button 
-              onClick={() => setActiveTab('architecture')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'architecture' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40' : 'text-slate-400 hover:text-white'}`}
-            >
-              Pipeline Architecture
-            </button>
-          </div>
-
-          <button 
-            onClick={() => setShowInspector(!showInspector)}
-            className="text-xs bg-[#0c1017] hover:bg-slate-800 text-cyan-300 px-3.5 py-2 rounded-xl border border-cyan-500/30 transition font-mono shadow-sm flex items-center gap-1.5"
-          >
-            <span>{showInspector ? 'Hide Payload' : '</> JSON Contract'}</span>
-          </button>
-
-          <div className="flex items-center gap-2.5 bg-[#0c1017] px-4 py-2 rounded-xl border border-slate-800 shadow-inner">
-            <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? 'bg-emerald-400 shadow-lg shadow-emerald-400/50 animate-pulse' : 'bg-rose-500'}`} />
-            <span className="text-xs font-mono font-bold tracking-wide text-slate-300">{isConnected ? 'WS 8000 Active' : 'Simulation Mode'}</span>
+            <div className="flex items-center gap-2 text-xs font-medium text-slate-300 bg-[#121824] px-3 py-1.5 rounded-lg border border-slate-800">
+              <span className={`size-2.5 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+              <span className="font-mono">{isConnected ? 'WS 8000 Connected' : 'Simulation Mode'}</span>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Security Critical Alert Banner */}
-      {currentResult.alert_triggered && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-rose-950/80 via-slate-950 to-rose-950/80 border border-rose-500/60 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-2xl backdrop-blur-md gap-3">
-          <div className="flex items-center gap-3.5">
-            <div className="p-3 bg-rose-500/20 border border-rose-500/40 rounded-xl text-rose-400 text-xl animate-bounce">
-              🚨
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-black text-rose-200 text-sm md:text-base tracking-wide">
-                  SYNTHETIC VOICE CLONE DETECTED IN STREAM
-                </h2>
-                <span className="px-2 py-0.5 bg-rose-500 text-black font-black text-[10px] rounded uppercase tracking-wider">
-                  HIGH RISK ESCALATION
-                </span>
-              </div>
-              <p className="text-xs text-rose-300/80 font-mono mt-1">{currentResult.alert_reason}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <span className="text-xs font-mono text-slate-400">Stream: <strong className="text-rose-300">{activeStreamId}</strong></span>
-            <button 
-              onClick={() => {
-                setStreams(prev => ({
-                  ...prev,
-                  [activeStreamId]: { ...prev[activeStreamId], alert_triggered: false }
-                }));
-              }}
-              className="px-3 py-1.5 bg-rose-500/20 hover:bg-rose-500/40 text-rose-200 border border-rose-500/50 rounded-lg text-xs font-mono transition"
-            >
-              Acknowledge
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="mx-auto max-w-7xl px-5 py-8 lg:py-10">
+        {activePage === 'overview' && (
+          <div className="space-y-8">
+            <section className="max-w-3xl">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-400 font-mono">Today&apos;s overview</p>
+              <h1 className="text-3xl font-black tracking-tight text-white md:text-4xl">Keep every conversation trustworthy.</h1>
+              <p className="mt-3 max-w-2xl leading-7 text-slate-400 text-sm">
+                VeriVox checks live audio for signs of an AI-generated voice. Select a conversation to inspect safety status and test telemetry injection.
+              </p>
+            </section>
 
-      {/* Conditional View Tabs */}
-      {activeTab === 'architecture' ? (
-        <div className="bg-[#0c1017]/90 backdrop-blur-xl p-6 md:p-8 rounded-2xl border border-slate-800/80 shadow-2xl space-y-6">
-          <div className="flex justify-between items-center border-b border-slate-800 pb-4">
-            <div>
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <span>Sprint 1–3 End-to-End Pipeline Specifications</span>
-              </h2>
-              <p className="text-xs text-slate-400 font-mono mt-1">Architecture finalized for live production evaluation standards.</p>
-            </div>
-            <button onClick={() => setActiveTab('telemetry')} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-black font-bold rounded-xl text-xs transition">
-              Back to Live SOC Dashboard
-            </button>
-          </div>
+            {selected.alert_triggered && (
+              <section className="flex flex-col gap-4 rounded-2xl border border-rose-500/40 bg-rose-950/30 p-5 md:flex-row md:items-center md:justify-between shadow-lg shadow-rose-950/20">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-rose-400">
+                    <AlertTriangle size={22} />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-rose-200 text-sm">Synthetic Voice Clone Detected</h2>
+                    <p className="mt-1 text-xs leading-5 text-rose-300/80 font-mono">
+                      {selected.alert_reason || 'The selected conversation has shown high-probability signature warnings.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setStreams(prev => ({
+                      ...prev,
+                      [activeStreamId]: { ...prev[activeStreamId], alert_triggered: false }
+                    }))
+                  }}
+                  className="flex shrink-0 items-center gap-2 text-xs font-bold text-rose-300 hover:text-white bg-rose-500/20 px-3 py-1.5 rounded-lg border border-rose-500/40 transition"
+                >
+                  <X size={14} /> Acknowledge Alert
+                </button>
+              </section>
+            )}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-slate-900/80 p-5 rounded-xl border border-cyan-500/30">
-              <span className="text-[10px] font-mono uppercase bg-cyan-950 text-cyan-400 px-2 py-0.5 rounded border border-cyan-800">Sprint 1</span>
-              <h3 className="text-sm font-bold text-white mt-2 mb-1">Audio Ingestion & Feature Pipeline</h3>
-              <p className="text-xs text-slate-400 mb-3">16kHz Mono standard input &rarr; WebRTC VAD (20ms frames) &rarr; 1-Sec Windowing with 50% Overlap.</p>
-              <div className="bg-black/40 p-3 rounded-lg font-mono text-[11px] text-cyan-300 space-y-1">
-                <div>[13 MFCC Features]</div>
-                <div>[5 Spectral (Centroid, Rolloff, ZCR, RMS)]</div>
-                <div>[12 Chroma Features]</div>
-                <div className="text-cyan-400 font-bold border-t border-cyan-900 pt-1">= 30-Dimensional Vector</div>
-              </div>
-            </div>
-
-            <div className="bg-slate-900/80 p-5 rounded-xl border border-indigo-500/30">
-              <span className="text-[10px] font-mono uppercase bg-indigo-950 text-indigo-400 px-2 py-0.5 rounded border border-indigo-800">Sprint 2</span>
-              <h3 className="text-sm font-bold text-white mt-2 mb-1">XGBoost Core AI Model</h3>
-              <p className="text-xs text-slate-400 mb-3">Maps 30-dim vector to <code className="text-indigo-300 font-mono">ai_probability</code> (0 = Real, 1 = Synthetic).</p>
-              <div className="bg-black/40 p-3 rounded-lg font-mono text-[11px] text-indigo-300 space-y-1">
-                <div>Dataset: ASVspoof / DEEP-VOICE</div>
-                <div>Speaker-disjoint 80/20 validation</div>
-                <div>Latency Target: &lt;5ms inference</div>
-                <div className="text-indigo-400 font-bold border-t border-indigo-900 pt-1">Model Version: xgb_v1</div>
-              </div>
-            </div>
-
-            <div className="bg-slate-900/80 p-5 rounded-xl border border-purple-500/30">
-              <span className="text-[10px] font-mono uppercase bg-purple-950 text-purple-400 px-2 py-0.5 rounded border border-purple-800">Sprint 3</span>
-              <h3 className="text-sm font-bold text-white mt-2 mb-1">Streaming & Rolling Risk Engine</h3>
-              <p className="text-xs text-slate-400 mb-3">FastAPI WebSocket server aggregates rolling score and evaluates consecutive flags.</p>
-              <div className="bg-black/40 p-3 rounded-lg font-mono text-[11px] text-purple-300 space-y-1">
-                <div>Low: 0.00 &ndash; 0.40</div>
-                <div>Medium: 0.40 &ndash; 0.70</div>
-                <div>High Risk: 0.70 &ndash; 1.00</div>
-                <div className="text-purple-400 font-bold border-t border-purple-900 pt-1">Triggers Instant SOC Alert</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Main Grid Layout */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Left Column: Stream Isolation & Simulation Injection */}
-          <div className="bg-[#0c1017]/90 backdrop-blur-xl p-6 rounded-2xl border border-slate-800/80 shadow-2xl flex flex-col justify-between space-y-6">
-            <div>
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Active Stream Isolation</h3>
-                <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-900">Multi-Channel</span>
-              </div>
-              <div className="grid grid-cols-3 gap-2 mb-6">
-                {['call_001', 'call_002', 'call_003'].map((id) => {
-                  const sRisk = streams[id]?.risk_level || 'LOW';
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => setActiveStreamId(id)}
-                      className={`py-3 px-2 rounded-xl text-xs font-bold transition truncate flex flex-col items-center gap-1 ${
-                        activeStreamId === id 
-                          ? 'bg-gradient-to-br from-cyan-600 to-indigo-600 text-white shadow-lg shadow-cyan-600/30 border border-cyan-400' 
-                          : 'bg-[#121824] text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-slate-200'
-                      }`}
-                    >
-                      <span className="font-mono">{id}</span>
-                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${sRisk === 'HIGH' ? 'bg-rose-500 text-black' : sRisk === 'MEDIUM' ? 'bg-amber-500 text-black' : 'bg-emerald-500 text-black'}`}>
-                        {sRisk}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="border-t border-slate-800/80 pt-5">
-                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Simulation Telemetry Injection</h3>
-                <div className="space-y-4 bg-[#121824]/80 p-4 rounded-xl border border-slate-800">
+            <section className="grid gap-4 sm:grid-cols-3" aria-label="Summary">
+              {[
+                { label: 'Active Channels', value: Object.keys(streams).length, detail: 'Monitored streams', icon: Radio },
+                { label: 'Need your attention', value: summary.high, detail: summary.high ? 'High risk alerts active' : 'Everything looks calm', icon: AlertTriangle },
+                { label: 'Speech detected now', value: `${summary.active}/${Object.keys(streams).length}`, detail: 'Active voice activity', icon: Volume2 },
+              ].map(({ label, value, detail, icon: Icon }) => (
+                <div key={label} className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-5 shadow-xl">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-300 font-medium">VAD Speech Activity</span>
-                    <label className="relative inline-flex items-center cursor-pointer">
+                    <p className="text-xs font-semibold text-slate-400">{label}</p>
+                    <Icon size={18} className="text-cyan-400" />
+                  </div>
+                  <p className="mt-4 text-3xl font-black tracking-tight text-white">{value}</p>
+                  <p className="mt-1 text-xs text-slate-500 font-mono">{detail}</p>
+                </div>
+              ))}
+            </section>
+
+            <section className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.5fr)]">
+              <div className="space-y-4 rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-5 shadow-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="font-bold text-sm text-white">Your conversations</h2>
+                    <p className="mt-0.5 text-xs text-slate-400">Choose one to inspect</p>
+                  </div>
+                  <Settings2 size={18} className="text-slate-500" />
+                </div>
+                <div className="space-y-2">
+                  {Object.keys(streams).map((id) => {
+                    const stream = streams[id]
+                    const risk = stream.risk_level || stream.status || 'LOW'
+                    return (
+                      <button
+                        key={id}
+                        onClick={() => setActiveStreamId(id)}
+                        className={`w-full rounded-xl border p-4 text-left transition ${
+                          activeStreamId === id
+                            ? 'border-cyan-400/60 bg-cyan-950/20 shadow-md shadow-cyan-950/50'
+                            : 'border-slate-800/80 bg-[#121824]/60 hover:border-slate-700 hover:bg-[#121824]'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-sm text-white">{stream.name || id}</p>
+                            <p className="mt-1 font-mono text-[11px] text-slate-400">
+                              {id} &middot; {stream.lastSeen || 'Live'}
+                            </p>
+                          </div>
+                          <StatusPill status={risk} />
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                          <span>{stream.speech_detected !== false ? 'Speech active' : 'Silence'}</span>
+                          <span className="font-mono text-cyan-300 font-semibold">Score {(stream.rolling_score ?? stream.score ?? 0).toFixed(2)}</span>
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-6 rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-5 shadow-xl md:p-6">
+                <div className="flex flex-col gap-3 border-b border-slate-800 pb-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2.5">
+                      <h2 className="font-bold text-base text-white">{selected.name || activeStreamId}</h2>
+                      <StatusPill status={selected.risk_level || selected.status} />
+                    </div>
+                    <p className="mt-1 text-xs text-slate-400">Real-time XGBoost safety metrics for this stream</p>
+                  </div>
+                  <span className="font-mono text-xs text-cyan-400 bg-cyan-950/60 border border-cyan-800/60 px-2.5 py-1 rounded-lg">
+                    {activeStreamId}
+                  </span>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-5">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                      <Gauge size={16} className="text-cyan-400" /> Rolling Risk Score
+                    </div>
+                    <p className="mt-3 text-4xl font-black font-mono text-white">
+                      {(selected.rolling_score ?? selected.score ?? 0).toFixed(3)}
+                    </p>
+                    <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+                      <div
+                        className="h-full rounded-full transition-all duration-500 bg-cyan-400"
+                        style={{ width: `${Math.min((selected.rolling_score ?? selected.score ?? 0) * 100, 100)}%` }}
+                      />
+                    </div>
+                    <p className="mt-3 text-[11px] leading-5 text-slate-400">
+                      Scores above 0.70 trigger automated SOC high-risk escalation.
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-5">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                      <Waves size={16} className="text-cyan-400" /> Feature Latency
+                    </div>
+                    <p className="mt-3 text-xl font-bold font-mono text-white">{selected.feature_latency_ms || '3.8'} ms</p>
+                    <p className="mt-2 text-xs leading-5 text-slate-400">
+                      30-Dimensional Feature Vector (13 MFCC + 5 Spectral + 12 Chroma).
+                    </p>
+                    <div className="mt-5 flex items-center gap-2 text-xs font-medium text-emerald-400">
+                      <CheckCircle2 size={15} /> Model: {selected.model_version || 'xgb_v1'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Simulation Telemetry Injection</h3>
+                      <p className="mt-0.5 text-xs text-slate-400">Transmit a 1-second audio window to your FastAPI WebSocket server.</p>
+                    </div>
+                    <SlidersHorizontal size={18} className="text-slate-500" />
+                  </div>
+                  <div className="mt-5 space-y-5">
+                    <label className="flex items-center justify-between gap-4 text-xs font-medium text-slate-300">
+                      <span>VAD Speech Activity</span>
                       <input
                         type="checkbox"
                         checked={speechDetected}
-                        onChange={(e) => setSpeechDetected(e.target.checked)}
-                        className="sr-only peer"
+                        onChange={(event) => setSpeechDetected(event.target.checked)}
+                        className="size-4 accent-cyan-400 rounded cursor-pointer"
                       />
-                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
                     </label>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between text-xs text-slate-400 mb-2">
-                      <span>XGBoost Window Probability (v1)</span>
-                      <span className="font-mono font-bold text-cyan-400">{speechDetected ? Number(probability).toFixed(2) : 'NULL (Silence)'}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      disabled={!speechDetected}
-                      value={probability}
-                      onChange={(e) => setProbability(e.target.value)}
-                      className="w-full accent-cyan-400 disabled:opacity-30 cursor-pointer bg-slate-800 rounded-lg h-2"
-                    />
-                  </div>
-
-                  <div className="pt-2 text-[11px] font-mono text-slate-400 flex justify-between">
-                    <span>Feature Vector:</span>
-                    <span className="text-cyan-300 font-bold">30-Dim (13 MFCC + 5 Spec + 12 Chroma)</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4">
-              <button
-                onClick={sendPrediction}
-                className="w-full bg-gradient-to-r from-cyan-500 via-indigo-600 to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 active:scale-[0.99] text-black font-black py-3.5 px-4 rounded-xl shadow-xl shadow-cyan-500/20 transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
-              >
-                <span>Transmit 1-Sec Window</span>
-                <span className="font-mono text-[11px] bg-black/30 px-2 py-0.5 rounded text-cyan-300"># {windowId}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Right Columns: Metrics & Live Visualizer */}
-          <div className="bg-[#0c1017]/90 backdrop-blur-xl p-6 md:p-8 rounded-2xl border border-slate-800/80 shadow-2xl lg:col-span-2 flex flex-col justify-between space-y-6">
-            <div>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b border-slate-800/80 pb-4 gap-3">
-                <div>
-                  <h3 className="text-base font-bold text-white flex items-center gap-2.5">
-                    <span>Live Stream Telemetry</span>
-                    <span className="text-xs font-mono font-bold text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded border border-cyan-800/50">
-                      {activeStreamId}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-slate-400 font-mono mt-0.5">Model: {currentResult.model_version} &bull; Extraction Latency: {currentResult.feature_latency_ms || '3.8'}ms</p>
-                </div>
-                <span className={`px-4 py-1.5 rounded-full text-xs font-black tracking-widest ${getRiskBadgeColor(currentResult.risk_level)}`}>
-                  {currentResult.risk_level || 'LOW'} RISK STATE
-                </span>
-              </div>
-
-              {/* Core Metrics Grid with High-Tech Glow */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-[#121824]/90 p-4 rounded-xl border border-slate-800 relative overflow-hidden group">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-cyan-500"></div>
-                  <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-1 font-mono">Rolling Risk Score</span>
-                  <span className="text-2xl font-black font-mono text-cyan-400">
-                    {Number(currentResult.rolling_score || 0).toFixed(3)}
-                  </span>
-                  <div className="w-full bg-slate-800 h-1 rounded-full mt-2 overflow-hidden">
-                    <div className="bg-cyan-400 h-full transition-all duration-500" style={{ width: `${Math.min((currentResult.rolling_score || 0) * 100, 100)}%` }}></div>
-                  </div>
-                </div>
-
-                <div className="bg-[#121824]/90 p-4 rounded-xl border border-slate-800 relative overflow-hidden group">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
-                  <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-1 font-mono">Consecutive Flags</span>
-                  <span className="text-2xl font-black font-mono text-amber-400">
-                    {currentResult.consecutive_flags || 0}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block mt-1 font-mono">Threshold trigger: &gt;2</span>
-                </div>
-
-                <div className="bg-[#121824]/90 p-4 rounded-xl border border-slate-800 relative overflow-hidden group">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
-                  <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-1 font-mono">VAD Status</span>
-                  <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-md inline-block mt-0.5 ${currentResult.speech_detected !== false ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/60' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}>
-                    {currentResult.speech_detected !== false ? 'SPEECH ACTIVE' : 'SILENCE'}
-                  </span>
-                </div>
-
-                <div className="bg-[#121824]/90 p-4 rounded-xl border border-slate-800 relative overflow-hidden group">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
-                  <span className="text-[11px] uppercase tracking-wider text-slate-400 block mb-1 font-mono">Window Prob (v1)</span>
-                  <span className="text-2xl font-black font-mono text-slate-200">
-                    {currentResult.ai_probability !== null && currentResult.ai_probability !== undefined 
-                      ? Number(currentResult.ai_probability).toFixed(2) 
-                      : '---'}
-                  </span>
-                  <span className="text-[10px] text-slate-500 block mt-1 font-mono">XGBoost output</span>
-                </div>
-              </div>
-
-              {/* Rolling Window History Log */}
-              <div className="bg-[#121824]/80 rounded-xl border border-slate-800 p-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider font-mono">Recent Window Telemetry Log ({activeStreamId})</h4>
-                  <span className="text-[10px] font-mono text-cyan-400">16kHz &bull; 50% Overlap</span>
-                </div>
-                {currentHistory.length === 0 ? (
-                  <p className="text-xs text-slate-600 font-mono py-2">No windows transmitted yet...</p>
-                ) : (
-                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {currentHistory.map((item, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs font-mono bg-[#0c1017] px-3.5 py-2 rounded-lg border border-slate-800/80 hover:border-cyan-500/30 transition">
-                        <div className="flex items-center gap-3">
-                          <span className="text-cyan-400 font-bold">Win #{item.window_id}</span>
-                          <span className="text-slate-500">{item.timestamp}</span>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className={item.speech_detected ? 'text-cyan-300' : 'text-slate-500'}>
-                            {item.speech_detected ? `Prob: ${item.ai_probability !== null ? Number(item.ai_probability).toFixed(2) : 'Null'}` : 'Silence Filtered'}
-                          </span>
-                          <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${item.risk_level === 'HIGH' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50' : item.risk_level === 'MEDIUM' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'}`}>
-                            {item.risk_level}
-                          </span>
-                        </div>
+                    <label className="block text-xs font-medium text-slate-300">
+                      <div className="mb-2 flex justify-between">
+                        <span>XGBoost Window Probability</span>
+                        <span className="font-mono text-cyan-300 font-bold">
+                          {speechDetected ? Number(probability).toFixed(2) : 'NULL (Silence)'}
+                        </span>
                       </div>
-                    ))}
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        value={probability}
+                        onChange={(event) => setProbability(event.target.value)}
+                        disabled={!speechDetected}
+                        className="w-full accent-cyan-400 disabled:opacity-30 cursor-pointer bg-slate-800 rounded-lg h-2"
+                      />
+                    </label>
+                    <button
+                      onClick={sendPrediction}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-950 transition hover:opacity-90 shadow-lg shadow-cyan-400/20 active:scale-[0.99]"
+                    >
+                      <span>Transmit Window</span> <span className="font-mono text-[10px] bg-black/20 px-2 py-0.5 rounded"># {windowId}</span> <ArrowRight size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {showInspector && (
+                  <div className="bg-black p-4 rounded-xl border border-cyan-500/40 font-mono text-xs text-cyan-300 overflow-x-auto shadow-2xl">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Active WebSocket State Payload</span>
+                      <span className="text-[10px] text-cyan-400">Schema v1.0</span>
+                    </div>
+                    <pre>{JSON.stringify(selected, null, 2)}</pre>
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* JSON Contract Inspector Drawer */}
-            {showInspector && (
-              <div className="bg-black p-4 rounded-xl border border-cyan-500/40 font-mono text-xs text-cyan-300 overflow-x-auto shadow-2xl">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Active Model-to-System Contract Payload</span>
-                  <span className="text-[10px] text-cyan-400">Schema v1.0</span>
-                </div>
-                <pre>{JSON.stringify(currentResult, null, 2)}</pre>
-              </div>
-            )}
-
-            <div className="bg-[#121824] px-4 py-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-400 font-mono gap-2">
-              <span>Pipeline: WebRTC VAD &rarr; 30-Dim Vector &rarr; XGBoost Classifier</span>
-              <span className="text-cyan-400 font-bold">VeriVox SOC Engine v1.0</span>
-            </div>
+            </section>
           </div>
-        </div>
-      )}
-    </div>
-  );
+        )}
+
+        {activePage === 'history' && (
+          <section className="max-w-5xl space-y-6">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-400 font-mono">Activity Log</p>
+              <h1 className="text-3xl font-black tracking-tight text-white">Recent Window Telemetry ({activeStreamId})</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
+                Timeline of window checks processed across the selected conversation stream.
+              </p>
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-slate-800 bg-[#0c1017]/90 shadow-xl">
+              <div className="hidden grid-cols-[100px_1fr_1fr_100px_100px] gap-4 border-b border-slate-800 px-5 py-4 text-xs font-bold uppercase tracking-wider text-slate-500 md:grid font-mono">
+                <span>Window</span>
+                <span>Timestamp</span>
+                <span>VAD & Probability</span>
+                <span>Rolling</span>
+                <span>Risk State</span>
+              </div>
+              {currentHistory.length === 0 ? (
+                <p className="p-5 text-xs text-slate-500 font-mono">No telemetry windows recorded yet.</p>
+              ) : (
+                currentHistory.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="grid gap-3 border-b border-slate-800/80 px-5 py-4 last:border-0 md:grid-cols-[100px_1fr_1fr_100px_100px] md:items-center md:gap-4 hover:bg-[#121824]/40 transition text-xs font-mono"
+                  >
+                    <span className="text-cyan-400 font-bold">Win #{item.window_id}</span>
+                    <span className="text-slate-400">{item.timestamp}</span>
+                    <span className="text-slate-300">{item.speech_detected ? `Prob: ${item.ai_probability?.toFixed(2)}` : 'Silence'}</span>
+                    <span className="text-slate-200">{item.rolling_score?.toFixed(3)}</span>
+                    <span>
+                      <StatusPill status={item.risk_level} />
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
+        {activePage === 'how' && (
+          <section className="max-w-4xl space-y-8">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-400 font-mono">Pipeline Architecture</p>
+              <h1 className="text-3xl font-black tracking-tight text-white">How VeriVox processes audio</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
+                End-to-end Sprint 1–3 architecture specifications for real-time inference.
+              </p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              {[
+                { icon: Mic, title: '1. Ingestion & VAD', text: '16kHz Mono audio split into 1-second rolling windows with WebRTC VAD filtering.' },
+                { icon: Activity, title: '2. 30-Dim Vector', text: 'Extracts 13 MFCCs, 5 spectral descriptors, and 12 chroma features.' },
+                { icon: ShieldCheck, title: '3. XGBoost & Risk', text: 'Evaluates probability via model xgb_v1 and aggregates rolling risk scores.' },
+              ].map(({ icon: Icon, title, text }) => (
+                <div key={title} className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-6 shadow-xl">
+                  <div className="mb-6 flex size-10 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+                    <Icon size={20} />
+                  </div>
+                  <h2 className="text-base font-bold text-white">{title}</h2>
+                  <p className="mt-2 text-xs leading-6 text-slate-400">{text}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+    </main>
+  )
 }
