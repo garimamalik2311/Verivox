@@ -1,89 +1,130 @@
-import React, { useState, useEffect, useRef } from 'react';
+'use client'
+
+import { useMemo, useState, useEffect, useRef } from 'react'
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  ChevronDown,
+  CircleHelp,
+  Gauge,
+  History,
+  LayoutDashboard,
+  Mic,
+  Radio,
+  Settings2,
+  ShieldCheck,
+  SlidersHorizontal,
+  Volume2,
+  Waves,
+  X,
+} from 'lucide-react'
+
+const initialStreams = {
+  'call_001': {
+    stream_id: 'call_001',
+    name: 'Support call',
+    rolling_score: 0.79,
+    consecutive_flags: 3,
+    risk_level: 'HIGH',
+    alert_triggered: true,
+    alert_reason: 'Consecutive high-probability synthetic signatures detected',
+    speech_detected: true,
+    ai_probability: 0.87,
+    model_version: 'xgb_v1',
+    feature_latency_ms: 3.8,
+    lastSeen: 'Just now'
+  },
+  'call_002': {
+    stream_id: 'call_002',
+    name: 'Sales call',
+    rolling_score: 0.18,
+    consecutive_flags: 0,
+    risk_level: 'LOW',
+    alert_triggered: false,
+    alert_reason: null,
+    speech_detected: true,
+    ai_probability: 0.12,
+    model_version: 'xgb_v1',
+    feature_latency_ms: 4.1,
+    lastSeen: '12 sec ago'
+  },
+  'call_003': {
+    stream_id: 'call_003',
+    name: 'Team meeting',
+    rolling_score: 0.52,
+    consecutive_flags: 1,
+    risk_level: 'MEDIUM',
+    alert_triggered: false,
+    alert_reason: null,
+    speech_detected: false,
+    ai_probability: null,
+    model_version: 'xgb_v1',
+    feature_latency_ms: 3.5,
+    lastSeen: '28 sec ago'
+  }
+}
+
+const initialHistories = {
+  'call_001': [
+    { window_id: 42, timestamp: '18:55:40', speech_detected: true, ai_probability: 0.87, rolling_score: 0.79, risk_level: 'HIGH' },
+    { window_id: 41, timestamp: '18:55:39.5', speech_detected: true, ai_probability: 0.91, rolling_score: 0.74, risk_level: 'HIGH' },
+  ],
+  'call_002': [
+    { window_id: 104, timestamp: '18:55:40', speech_detected: true, ai_probability: 0.12, rolling_score: 0.18, risk_level: 'LOW' },
+  ],
+  'call_003': [
+    { window_id: 12, timestamp: '18:55:40', speech_detected: false, ai_probability: null, rolling_score: 0.52, risk_level: 'MEDIUM' },
+  ]
+}
+
+function StatusPill({ status }) {
+  const normalizedStatus = status ? status.toLowerCase() : 'low'
+  const styles = {
+    high: 'border-rose-400/30 bg-rose-400/10 text-rose-300',
+    medium: 'border-amber-400/30 bg-amber-400/10 text-amber-300',
+    low: 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300',
+    clear: 'border-slate-700 bg-slate-800/60 text-slate-300',
+  }
+  return <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold uppercase ${styles[normalizedStatus] || styles.low}`}>{status}</span>
+}
 
 export default function App() {
-  const [streams, setStreams] = useState({});
-  const [streamHistories, setStreamHistories] = useState({});
-  const [activeStreamId, setActiveStreamId] = useState('call_001');
-  const [isConnected, setIsConnected] = useState(false);
-  const [windowId, setWindowId] = useState(42);
-  const [probability, setProbability] = useState(0.87);
-  const [speechDetected, setSpeechDetected] = useState(true);
-  const [showInspector, setShowInspector] = useState(false);
-  const [activeTab, setActiveTab] = useState('telemetry');
-  const wsRef = useRef(null);
+  const [activePage, setActivePage] = useState('overview')
+  const [streams, setStreams] = useState(initialStreams)
+  const [streamHistories, setStreamHistories] = useState(initialHistories)
+  const [activeStreamId, setActiveStreamId] = useState('call_001')
+  const [speechDetected, setSpeechDetected] = useState(true)
+  const [probability, setProbability] = useState(0.87)
+  const [windowId, setWindowId] = useState(43)
+  const [isConnected, setIsConnected] = useState(false)
+  const [showInspector, setShowInspector] = useState(false)
+  const [activeTab, setActiveTab] = useState('telemetry')
+  const wsRef = useRef(null)
+
+  const selected = streams[activeStreamId] || streams['call_001']
+  const currentHistory = streamHistories[activeStreamId] || []
 
   useEffect(() => {
-    setStreams({
-      'call_001': {
-        stream_id: 'call_001',
-        rolling_score: 0.79,
-        consecutive_flags: 3,
-        risk_level: 'HIGH',
-        alert_triggered: true,
-        alert_reason: 'Consecutive high-probability synthetic signatures detected (Win #42)',
-        speech_detected: true,
-        ai_probability: 0.87,
-        model_version: 'xgb_v1',
-        feature_latency_ms: 3.8,
-        vector_dim: 30
-      },
-      'call_002': {
-        stream_id: 'call_002',
-        rolling_score: 0.18,
-        consecutive_flags: 0,
-        risk_level: 'LOW',
-        alert_triggered: false,
-        alert_reason: null,
-        speech_detected: true,
-        ai_probability: 0.12,
-        model_version: 'xgb_v1',
-        feature_latency_ms: 4.1,
-        vector_dim: 30
-      },
-      'call_003': {
-        stream_id: 'call_003',
-        rolling_score: 0.52,
-        consecutive_flags: 1,
-        risk_level: 'MEDIUM',
-        alert_triggered: false,
-        alert_reason: null,
-        speech_detected: false,
-        ai_probability: null,
-        model_version: 'xgb_v1',
-        feature_latency_ms: 3.5,
-        vector_dim: 30
-      }
-    });
+    const ws = new WebSocket('ws://localhost:8000/ws')
+    wsRef.current = ws
 
-    setStreamHistories({
-      'call_001': [
-        { window_id: 42, timestamp: '18:55:40', speech_detected: true, ai_probability: 0.87, rolling_score: 0.79, risk_level: 'HIGH' },
-        { window_id: 41, timestamp: '18:55:39.5', speech_detected: true, ai_probability: 0.91, rolling_score: 0.74, risk_level: 'HIGH' },
-        { window_id: 40, timestamp: '18:55:39', speech_detected: true, ai_probability: 0.82, rolling_score: 0.68, risk_level: 'MEDIUM' },
-        { window_id: 39, timestamp: '18:55:38.5', speech_detected: false, ai_probability: null, rolling_score: 0.58, risk_level: 'MEDIUM' },
-      ],
-      'call_002': [
-        { window_id: 104, timestamp: '18:55:40', speech_detected: true, ai_probability: 0.12, rolling_score: 0.18, risk_level: 'LOW' },
-        { window_id: 103, timestamp: '18:55:39.5', speech_detected: true, ai_probability: 0.05, rolling_score: 0.15, risk_level: 'LOW' },
-      ],
-      'call_003': [
-        { window_id: 12, timestamp: '18:55:40', speech_detected: false, ai_probability: null, rolling_score: 0.52, risk_level: 'MEDIUM' },
-      ]
-    });
-
-    const ws = new WebSocket('ws://localhost:8000/ws');
-    wsRef.current = ws;
-
-    ws.onopen = () => setIsConnected(true);
-    ws.onclose = () => setIsConnected(false);
+    ws.onopen = () => setIsConnected(true)
+    ws.onclose = () => setIsConnected(false)
+    ws.onerror = () => setIsConnected(false)
+    
     ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = JSON.parse(event.data)
         if (data.stream_id) {
-          const streamId = data.stream_id;
-          setStreams((prev) => ({ ...prev, [streamId]: data }));
+          const streamId = data.stream_id
+          setStreams((prev) => ({
+            ...prev,
+            [streamId]: { ...prev[streamId], ...data, name: prev[streamId]?.name || streamId }
+          }))
           setStreamHistories((prev) => {
-            const currentHistory = prev[streamId] || [];
+            const currentHistory = prev[streamId] || []
             const newEntry = {
               window_id: data.window_id || windowId,
               timestamp: new Date().toLocaleTimeString(),
@@ -91,24 +132,33 @@ export default function App() {
               ai_probability: data.ai_probability,
               rolling_score: data.rolling_score,
               risk_level: data.risk_level || 'LOW'
-            };
+            }
             return {
               ...prev,
               [streamId]: [newEntry, ...currentHistory].slice(0, 10)
-            };
-          });
+            }
+          })
         }
       } catch (err) {
-        console.error("Failed to parse incoming WebSocket message", err);
+        console.error("Failed to parse incoming WebSocket message", err)
       }
-    };
+    }
 
     return () => {
-      ws.close();
-    };
-  }, []);
+      ws.close()
+    }
+  }, [windowId])
 
-  const sendPrediction = () => {
+  const summary = useMemo(() => {
+    const streamList = Object.values(streams)
+    return {
+      high: streamList.filter((s) => s.risk_level === 'HIGH' || s.status === 'High').length,
+      active: streamList.filter((s) => s.speech_detected ?? s.speech).length,
+      average: streamList.reduce((sum, s) => sum + (s.rolling_score ?? s.score ?? 0), 0) / streamList.length,
+    }
+  }, [streams])
+
+  function sendPrediction() {
     const payload = {
       schema_version: '1.0',
       stream_id: activeStreamId,
@@ -119,18 +169,19 @@ export default function App() {
       model_version: 'xgb_v1',
       feature_latency_ms: (Math.random() * 1.5 + 3.0).toFixed(2),
       vector_dim: 30
-    };
+    }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(payload));
+      wsRef.current.send(JSON.stringify(payload))
     }
 
     setStreams((prev) => {
-      const current = prev[activeStreamId] || {};
-      const newProb = speechDetected ? Number(probability) : (current.ai_probability || 0.1);
-      const newRolling = Number(((current.rolling_score || 0.2) * 0.7 + newProb * 0.3).toFixed(3));
-      const risk = newRolling > 0.7 ? 'HIGH' : newRolling > 0.4 ? 'MEDIUM' : 'LOW';
-      const alertActive = risk === 'HIGH';
+      const current = prev[activeStreamId] || {}
+      const newProb = speechDetected ? Number(probability) : (current.ai_probability || 0.1)
+      const currentScore = current.rolling_score ?? current.score ?? 0.2
+      const newRolling = Number((currentScore * 0.7 + newProb * 0.3).toFixed(3))
+      const risk = newRolling > 0.7 ? 'HIGH' : newRolling > 0.4 ? 'MEDIUM' : 'LOW'
+      const alertActive = risk === 'HIGH'
 
       return {
         ...prev,
@@ -140,17 +191,21 @@ export default function App() {
           window_id: windowId,
           ai_probability: speechDetected ? newProb : null,
           rolling_score: newRolling,
+          score: newRolling,
           consecutive_flags: risk === 'HIGH' ? (current.consecutive_flags || 0) + 1 : 0,
           risk_level: risk,
+          status: risk === 'HIGH' ? 'High' : risk === 'MEDIUM' ? 'Medium' : 'Low',
           alert_triggered: alertActive,
           alert_reason: alertActive ? `Rolling threshold crossed (${newRolling} > 0.70) at Win #${windowId}` : null,
-          speech_detected: speechDetected
+          speech_detected: speechDetected,
+          speech: speechDetected,
+          lastSeen: 'Just now'
         }
-      };
-    });
+      }
+    })
 
     setStreamHistories((prev) => {
-      const currentHistory = prev[activeStreamId] || [];
+      const currentHistory = prev[activeStreamId] || []
       const newEntry = {
         window_id: windowId,
         timestamp: new Date().toLocaleTimeString(),
@@ -158,15 +213,15 @@ export default function App() {
         ai_probability: speechDetected ? Number(probability) : null,
         rolling_score: streams[activeStreamId]?.rolling_score || 0.5,
         risk_level: streams[activeStreamId]?.risk_level || 'LOW'
-      };
+      }
       return {
         ...prev,
         [activeStreamId]: [newEntry, ...currentHistory].slice(0, 10)
-      };
-    });
+      }
+    })
 
-    setWindowId((prev) => prev + 1);
-  };
+    setWindowId((prev) => prev + 1)
+  }
 
   const currentResult = streams[activeStreamId] || {
     stream_id: activeStreamId,
@@ -181,8 +236,6 @@ export default function App() {
     feature_latency_ms: 3.8,
     vector_dim: 30
   };
-
-  const currentHistory = streamHistories[activeStreamId] || [];
 
   const getRiskBadgeColor = (level) => {
     if (level === 'HIGH') return 'bg-rose-500/20 text-rose-400 border border-rose-500/60 shadow-lg shadow-rose-900/40 animate-pulse';
