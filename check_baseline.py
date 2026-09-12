@@ -36,6 +36,10 @@ baseline = XGBClassifier(
 )
 baseline.fit(X_train, y_train)
 
+# Save the baseline model object for Sprint 2b's /predict API
+joblib.dump(baseline, REPORTS / "xgboost_baseline.joblib")
+print(f"Saved {REPORTS / 'xgboost_baseline.joblib'}")
+
 # ---- Evaluate baseline on test ----
 probs_baseline = baseline.predict_proba(X_test)[:, 1]
 auc_baseline = roc_auc_score(y_test, probs_baseline)

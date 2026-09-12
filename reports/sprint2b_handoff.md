@@ -1,8 +1,7 @@
 # Sprint 2b Handoff — Trained Model
 
 ## Which model to use
-**Ship the BASELINE XGBoost** (`reports/xgboost_tuned.joblib` contains the tuned model,
-but the baseline is what we recommend — see below).
+**Ship the BASELINE XGBoost** (`reports/xgboost_baseline.joblib`).
 
 Tuning gave no meaningful test improvement:
 - Baseline test ROC-AUC: 0.9085
@@ -20,6 +19,7 @@ performs better under your method:**
 - `reports/test_labels.npy` — ground-truth labels (0 = real, 1 = fake)
 
 ## Files
+- `reports/xgboost_baseline.joblib` — trained XGBClassifier (baseline params) ← **use this**
 - `reports/xgboost_tuned.joblib` — trained XGBClassifier (tuned params)
 - `reports/xgboost_best_params.json` — tuned hyperparameters
 - `reports/model_comparison.csv` — XGBoost vs RF vs LogReg vs KNN
@@ -28,26 +28,32 @@ performs better under your method:**
 ## Loading
 ```python
 import joblib, numpy as np
-model = joblib.load("reports/xgboost_tuned.joblib")
-```
 
-To use the baseline instead, re-fit it with the same hyperparameters in
-`train_model.py`'s `xgboost_baseline()` function — or, since test probabilities
-are already saved for both, use `test_probs_baseline.npy` for calibration work
-directly.
+# Load the baseline model (recommended for shipping)
+model = joblib.load("reports/xgboost_baseline.joblib")
+
+# Or the tuned model
+# model = joblib.load("reports/xgboost_tuned.joblib")
+```
 
 ## Inference
 ```python
-# X_window is a single 30-dim feature vector
+# X_window is a single 30-dim feature vector, shape (30,)
 probs = model.predict_proba(X_window.reshape(1, -1))
 ai_probability = float(probs[0, 1])
 ```
 
-## Interface contract (per spec)
+**Warning:** `ai_probability` here is the **raw, uncalibrated** classifier output.
+It's a ranking score, not a true likelihood. Sprint 2b's calibration step
+transforms it into a trustworthy probability — do not consume the raw value
+directly in the risk engine.
+
+## Interface contract (final, v1.0)
 Each prediction maps to a JSON object:
 
 ```json
 {
+  "schema_version": "1.0",
   "stream_id": "...",
   "window_id": 12345,
   "timestamp": 1234567890.123,
@@ -57,7 +63,19 @@ Each prediction maps to a JSON object:
 }
 ```
 
-`ai_probability` is the output of `predict_proba(...)[:, 1]`.
+**Field notes:**
+- `schema_version` — contract version. Bumps only on breaking changes.
+- `speech_detected` — always `true` for a ModelPrediction (VAD runs upstream; the
+  model only scores speech-passed windows). Absence of a prediction means "no speech
+  in this window" — the risk engine should NOT infer a 0.0 probability for gaps.
+- `ai_probability` — output of `predict_proba(...)[:, 1]`. Class 1 = fake/AI;
+  class 0 = real/bonafide.
+- `model_version` — see versioning below.
+
+**Model versioning:**
+- `sprint2a-xgb-v1` — raw, uncalibrated output (current)
+- `sprint2a-xgb-v1-calibrated` — to be used once Sprint 2b ships the calibrated model
+
 The rolling risk aggregation layer is yours.
 
 ## Model facts (updated)
@@ -95,7 +113,7 @@ Use `test_probs.npy` + `test_labels.npy` (or the baseline variants) to measure
 calibration quality on the held-out test set — the model has never seen these
 1013 windows, so the number you measure is honest.
 
-## Recommended thresholds for risk engine (Avika's question)
+## Recommended thresholds for risk engine
 At threshold 0.5: precision ~0.82, recall ~0.82.
 For higher-precision alerting (fewer false positives), raise threshold to
 ~0.7 — expect precision ~0.90 but recall drops to ~0.60.
@@ -119,7 +137,8 @@ exact ordering and silently produces garbage on reordered inputs.
   artifact is coupled to the specific train/val/test partition.
 
 ## Artifacts
-- `reports/xgboost_tuned.joblib`
+- `reports/xgboost_baseline.joblib` — **baseline model (ship this)**
+- `reports/xgboost_tuned.joblib` — tuned model (kept for reference)
 - `reports/xgboost_best_params.json`
 - `reports/model_comparison.csv`
 - `reports/test_probs.npy` (tuned)
