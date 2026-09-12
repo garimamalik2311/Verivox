@@ -1,0 +1,80 @@
+======================================================================
+1. LOAD & INSPECT
+======================================================================
+X_train: (5737, 30)  float32
+y_train: (5737,)  int64
+X_val  : (1455, 30)    float32
+y_val  : (1455,)    int64
+
+NaN in train: False
+NaN in val  : False
+
+Train label counts: [2493 3244]
+Val   label counts: [1098  357]
+
+======================================================================
+2. EDA
+======================================================================
+Class balance: real=2493  fake=3244  ratio=0.77
+
+Features with ~zero variance: 0 []
+Feature variance range: [4.1949e-04, 3.3120e+05]
+Feature pairs with |r| > 0.95: 0
+
+Saved reports/eda_feature_distributions.png
+
+======================================================================
+3. XGBOOST BASELINE (untuned)
+======================================================================
+Fit time: 1.15s
+Val ROC-AUC: 0.9357
+
+              precision    recall  f1-score   support
+
+           0     0.9694    0.6931    0.8083      1098
+           1     0.4970    0.9328    0.6485       357
+
+    accuracy                         0.7519      1455
+   macro avg     0.7332    0.8129    0.7284      1455
+weighted avg     0.8535    0.7519    0.7691      1455
+
+
+======================================================================
+4. XGBOOST HYPERPARAMETER TUNING
+======================================================================
+Fitting 5 folds for each of 243 candidates, totalling 1215 fits
+
+Grid search time: 882.3s
+Best params: {'colsample_bytree': 1.0, 'learning_rate': 0.1, 'max_depth': 4, 'n_estimators': 500, 'subsample': 0.8}
+Best CV ROC-AUC: 0.8816
+
+Tuned model on val:
+              precision    recall  f1-score   support
+
+           0     0.9666    0.7122    0.8201      1098
+           1     0.5108    0.9244    0.6580       357
+
+    accuracy                         0.7643      1455
+   macro avg     0.7387    0.8183    0.7391      1455
+weighted avg     0.8548    0.7643    0.7804      1455
+
+Val ROC-AUC: 0.9365
+
+Saved reports/xgboost_tuned.joblib
+Saved reports/xgboost_best_params.json
+
+======================================================================
+5. MODEL COMPARISON
+======================================================================
+XGBoost               acc=0.7519  f1=0.6485  auc=0.9357  (10.2s)
+RandomForest          acc=0.6612  f1=0.5664  auc=0.8994  (3.1s)
+LogisticRegression    acc=0.6687  f1=0.5610  auc=0.8632  (0.3s)
+KNN                   acc=0.6309  f1=0.5484  auc=0.8789  (0.0s)
+
+Saved reports/model_comparison.csv
+
+             model  accuracy  precision   recall       f1  roc_auc  fit_time_s
+           XGBoost  0.751890   0.497015 0.932773 0.648491 0.935681       10.19
+      RandomForest  0.661168   0.412821 0.901961 0.566403 0.899362        3.13
+               KNN  0.630928   0.391827 0.913165 0.548360 0.878873        0.02
+LogisticRegression  0.668729   0.415655 0.862745 0.561020 0.863176        0.33

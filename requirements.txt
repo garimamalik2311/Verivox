@@ -20,3 +20,7 @@ pytest==9.1.1
 
 # Classifier Training
 xgboost>=2.0.0
+torchcodec>=0.16.0
+
+# Visualization (EDA plots in train_model.py)
+matplotlib>=3.8.0

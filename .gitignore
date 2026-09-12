@@ -16,3 +16,10 @@ data/processed/
 *.ogg
 models/*.json
 !data/WhatsApp*.ogg
+venv/
+
+# Sprint 2a local artifacts
+data/processed_v1/
+reports_training*.log
+reports_baseline_test.log
+processed_v2.zip
