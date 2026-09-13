@@ -289,6 +289,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
     accumulator = WindowAccumulator()
 
     window_id = 0
+    audio_remainder = np.empty(0, dtype=np.float32)
 
     print(
         f"[audio] Client connected: "
@@ -345,6 +346,16 @@ async def audio_websocket_endpoint(websocket: WebSocket):
                 .astype(np.float32)
                 / 32768.0
             )
+            audio = np.concatenate((audio_remainder, audio))
+            complete_samples = (
+                len(audio) // VAD_FRAME_SAMPLES
+            ) * VAD_FRAME_SAMPLES
+
+            if complete_samples == 0:
+                audio_remainder = audio
+                continue
+
+            audio_remainder = audio[complete_samples:]
 
             # ---------------------------------------------------------------
             # VAD processing
@@ -352,7 +363,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
 
             for start in range(
                 0,
-                len(audio) - VAD_FRAME_SAMPLES + 1,
+                complete_samples,
                 VAD_FRAME_SAMPLES,
             ):
 
