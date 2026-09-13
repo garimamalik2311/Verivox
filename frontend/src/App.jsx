@@ -6,8 +6,11 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ChevronDown,
   CircleHelp,
+  Fingerprint,
   Gauge,
+  GitBranch,
   History,
   LayoutDashboard,
   Mic,
@@ -15,6 +18,7 @@ import {
   Settings2,
   ShieldCheck,
   SlidersHorizontal,
+  UserCheck,
   Volume2,
   Waves,
   X,
@@ -43,7 +47,32 @@ const initialStreams = {
       { time: '40s', prob: 78 },
       { time: '50s', prob: 75 },
       { time: '60s', prob: 87 },
-    ]
+    ],
+    prosody: {
+      rhythm_score: 0.92,
+      pitch_variance: 'Unnaturally Flat (CV: 0.04)',
+      pause_regularity: 'Rigid / Synthetic Intervals',
+      status: 'Anomalous Timing'
+    },
+    speaker_verification: {
+      enrolled_speaker: 'Jane Doe (ID: EMP-409)',
+      match_score: 0.42,
+      confidence: 'Mismatch',
+      status: 'Failed Verification'
+    },
+    vocoder_fingerprint: {
+      detected_tool: 'ElevenLabs Turbo v2 / VITS',
+      confidence: 0.89,
+      artifact_signature: 'High-frequency phase discontinuity'
+    },
+    explainability: {
+      primary_driver: 'Flat prosody + spectral artifact cluster',
+      factors: [
+        'Unnatural syllable timing regularity (CV < 0.05)',
+        'Vocoder high-frequency cutoff band signature match',
+        'Speaker embedding distance > 0.65 threshold from enrolled sample'
+      ]
+    }
   },
   'call_002': {
     stream_id: 'call_002',
@@ -65,7 +94,31 @@ const initialStreams = {
       { time: '20s', prob: 12 },
       { time: '30s', prob: 18 },
       { time: '40s', prob: 12 },
-    ]
+    ],
+    prosody: {
+      rhythm_score: 0.34,
+      pitch_variance: 'Natural Dynamic (CV: 0.28)',
+      pause_regularity: 'Natural Conversational Jitter',
+      status: 'Normal'
+    },
+    speaker_verification: {
+      enrolled_speaker: 'Alex Smith (ID: EMP-102)',
+      match_score: 0.94,
+      confidence: 'High Match',
+      status: 'Verified'
+    },
+    vocoder_fingerprint: {
+      detected_tool: 'None (Organic Human Speech)',
+      confidence: 0.05,
+      artifact_signature: 'Clean natural harmonic distribution'
+    },
+    explainability: {
+      primary_driver: 'Standard organic voice parameters',
+      factors: [
+        'Natural micro-tremors and pitch modulation present',
+        'Voice embedding matches securely with corporate biometric record'
+      ]
+    }
   },
   'call_003': {
     stream_id: 'call_003',
@@ -85,7 +138,31 @@ const initialStreams = {
       { time: '0s', prob: 30 },
       { time: '30s', prob: 45 },
       { time: '60s', prob: 52 },
-    ]
+    ],
+    prosody: {
+      rhythm_score: 0.61,
+      pitch_variance: 'Moderate Variance',
+      pause_regularity: 'Semi-Regular',
+      status: 'Monitoring'
+    },
+    speaker_verification: {
+      enrolled_speaker: 'Unassigned / Group Channel',
+      match_score: 0.71,
+      confidence: 'Ambiguous',
+      status: 'Pending Verification'
+    },
+    vocoder_fingerprint: {
+      detected_tool: 'Uncertain / Edge Synthesis',
+      confidence: 0.48,
+      artifact_signature: 'Mixed background noise profile'
+    },
+    explainability: {
+      primary_driver: 'Borderline rolling probability threshold',
+      factors: [
+        'Intermittent silence windows reduce confidence score',
+        'Moderate pitch regularization observed during active speech segments'
+      ]
+    }
   }
 }
 
@@ -236,7 +313,20 @@ export default function App() {
           speech_detected: speechDetected,
           speech: speechDetected,
           lastSeen: 'Just now',
-          timeSeries: updatedTimeSeries
+          timeSeries: updatedTimeSeries,
+          prosody: {
+            ...current.prosody,
+            rhythm_score: Number((newProb * 0.9 + 0.1).toFixed(2)),
+            status: newProb > 0.7 ? 'Anomalous Timing' : 'Normal'
+          },
+          vocoder_fingerprint: {
+            ...current.vocoder_fingerprint,
+            confidence: newProb
+          },
+          explainability: {
+            ...current.explainability,
+            primary_driver: newProb > 0.7 ? 'Flat prosody + spectral artifact' : 'Organic human parameters'
+          }
         }
       }
     })
@@ -282,7 +372,6 @@ export default function App() {
 
     return (
       <div className="relative w-full overflow-hidden rounded-xl bg-[#090d16] border border-slate-800/80 p-4">
-        {/* Top Header of Card matching image */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
           <div className="flex items-center gap-2">
             <span className="text-sm font-bold text-white tracking-tight">Synthetic Voice Probability (Real-time)</span>
@@ -298,7 +387,6 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4 items-center">
-          {/* SVG Graph Canvas */}
           <div className="relative h-[220px] w-full">
             <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
               <defs>
@@ -308,7 +396,6 @@ export default function App() {
                 </linearGradient>
               </defs>
 
-              {/* Background Horizontal Grid Lines */}
               {[0, 25, 50, 75, 100].map((val) => {
                 const y = height - padding - (val / maxProb) * (height - padding * 2)
                 return (
@@ -321,16 +408,10 @@ export default function App() {
                 )
               })}
 
-              {/* Threshold Line (71.7%) */}
               <line x1={padding} y1={thresholdY} x2={width - padding} y2={thresholdY} stroke="#22d3ee" strokeDasharray="4 4" strokeWidth="1.5" />
-
-              {/* Area fill */}
               <path d={areaString} fill="url(#probGradient)" />
-
-              {/* Main Line */}
               <path d={pathString} fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
 
-              {/* Data points & Pulsing indicator on the latest point */}
               {coords.map((pt, idx) => {
                 const isLast = idx === coords.length - 1
                 return (
@@ -342,14 +423,10 @@ export default function App() {
               })}
             </svg>
 
-            {/* Floating Callout box like in user's design image */}
             {coords.length > 0 && (
               <div 
                 className="absolute z-10 hidden sm:block bg-[#120d16] border border-rose-500/50 rounded-xl px-3 py-2 shadow-2xl pointer-events-none"
-                style={{ 
-                  top: '15%', 
-                  right: '15%' 
-                }}
+                style={{ top: '15%', right: '15%' }}
               >
                 <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-rose-400">
                   <span>{coords[coords.length - 1].prob}%</span>
@@ -359,7 +436,6 @@ export default function App() {
               </div>
             )}
 
-            {/* X-Axis labels */}
             <div className="flex justify-between px-7 text-[10px] font-mono text-slate-500 mt-1">
               <span>0s</span>
               <span>10s</span>
@@ -371,7 +447,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* Right Side Stats Panel matching user picture */}
           <div className="rounded-xl border border-slate-800 bg-[#0c1017] p-4 flex flex-col justify-between">
             <div>
               <p className="text-xs text-slate-400 font-mono">Current Probability</p>
@@ -414,6 +489,7 @@ export default function App() {
           <nav className="flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-[#07090e] p-1" aria-label="Main navigation">
             {[
               { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+              { id: 'analytics', label: 'Advanced Analytics', icon: Activity },
               { id: 'history', label: 'History', icon: History },
               { id: 'how', label: 'How it works', icon: CircleHelp },
             ].map(({ id, label, icon: Icon }) => (
@@ -455,7 +531,6 @@ export default function App() {
               </p>
             </section>
 
-            {/* Real-time Streaming Probability Waveform Element (Matching User Image) */}
             <section className="space-y-4">
               {renderLiveGraph(selected.timeSeries)}
             </section>
@@ -649,6 +724,167 @@ export default function App() {
                 )}
               </div>
             </section>
+          </div>
+        )}
+
+        {activePage === 'analytics' && (
+          <div className="space-y-8 max-w-6xl mx-auto">
+            <div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-cyan-400 font-mono">Deep Inspection Panel</p>
+              <h1 className="text-3xl font-black tracking-tight text-white">Real-Time Behavioral & Deep Telemetry</h1>
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-400">
+                Advanced analysis inspecting prosodic rhythm, speaker verification signatures, vocoder fingerprinting, and regulatory explainability for <span className="text-cyan-400 font-mono">{activeStreamId} ({selected.name})</span>.
+              </p>
+            </div>
+
+            {/* Stream Selector bar for analytics */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2">
+              {Object.keys(streams).map((id) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveStreamId(id)}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold font-mono transition border ${
+                    activeStreamId === id
+                      ? 'bg-cyan-400 text-slate-950 border-cyan-400 shadow-md shadow-cyan-400/20'
+                      : 'bg-[#0c1017] text-slate-300 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  {streams[id].name} ({id})
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* 1. Prosody & Behavioral Analysis */}
+              <div className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+                      <Activity size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white">1. Prosody & Behavioral Analysis</h2>
+                      <p className="text-xs text-slate-400">Rhythm, pitch variance, and pause regularity</p>
+                    </div>
+                  </div>
+                  <StatusPill status={selected.prosody?.status || 'Normal'} />
+                </div>
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div className="bg-[#121824]/80 p-3.5 rounded-xl border border-slate-800">
+                    <p className="text-[11px] text-slate-400 font-mono">Rhythm Score</p>
+                    <p className="text-lg font-bold font-mono text-white mt-1">{selected.prosody?.rhythm_score ?? 0.85}</p>
+                    <p className="text-[10px] text-cyan-400 mt-1 font-mono">Unnaturally smooth timing flag</p>
+                  </div>
+                  <div className="bg-[#121824]/80 p-3.5 rounded-xl border border-slate-800">
+                    <p className="text-[11px] text-slate-400 font-mono">Pitch Variance</p>
+                    <p className="text-sm font-bold text-white mt-1">{selected.prosody?.pitch_variance || 'Flat'}</p>
+                    <p className="text-[10px] text-slate-400 mt-1 font-mono">{selected.prosody?.pause_regularity}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed pt-1">
+                  Catches clone tells that raw spectral models miss. Synthetic speech often exhibits rigid timing intervals and unnaturally flat modulation.
+                </p>
+              </div>
+
+              {/* 2. Cross-Session Speaker Verification */}
+              <div className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-indigo-400/10 text-indigo-300 border border-indigo-400/20">
+                      <UserCheck size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white">2. Cross-Session Speaker Verification</h2>
+                      <p className="text-xs text-slate-400">Biometric comparison against enrolled sample</p>
+                    </div>
+                  </div>
+                  <StatusPill status={selected.speaker_verification?.status || 'Verified'} />
+                </div>
+                <div className="bg-[#121824]/80 p-4 rounded-xl border border-slate-800 space-y-3">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Enrolled Profile:</span>
+                    <span className="font-mono font-bold text-white">{selected.speaker_verification?.enrolled_speaker}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Biometric Match Score:</span>
+                    <span className="font-mono font-bold text-cyan-300">{(selected.speaker_verification?.match_score ?? 0.9) * 100}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-indigo-400 rounded-full transition-all duration-500"
+                      style={{ width: `${(selected.speaker_verification?.match_score ?? 0.9) * 100}%` }}
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Catches sophisticated clones that sound natural acoustically but fail to match the unique voice signature of the authorized individual.
+                </p>
+              </div>
+
+              {/* 3. Vocoder Fingerprinting */}
+              <div className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-rose-400/10 text-rose-300 border border-rose-400/20">
+                      <Fingerprint size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white">3. Vocoder Fingerprinting</h2>
+                      <p className="text-xs text-slate-400">Identifies the specific generative architecture</p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-xs text-rose-400 bg-rose-950/40 border border-rose-500/30 px-2.5 py-1 rounded-lg">
+                    {Math.round((selected.vocoder_fingerprint?.confidence ?? 0.8) * 100)}% Match
+                  </span>
+                </div>
+                <div className="bg-[#121824]/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                  <div className="text-xs font-mono text-rose-300 font-bold">
+                    Target Tool: {selected.vocoder_fingerprint?.detected_tool}
+                  </div>
+                  <div className="text-[11px] font-mono text-slate-400">
+                    Signature Artifact: {selected.vocoder_fingerprint?.artifact_signature}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Pinpoints the exact backend neural vocoder or cloning framework used, delivering actionable intelligence beyond a generic synthetic warning.
+                </p>
+              </div>
+
+              {/* 4. Explainability & Regulatory Audit Trail */}
+              <div className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
+                      <GitBranch size={20} />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-bold text-white">4. Explainability & Audit Trail</h2>
+                      <p className="text-xs text-slate-400">Regulatory compliance & decision justification</p>
+                    </div>
+                  </div>
+                  <span className="font-mono text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+                    Audit Ready
+                  </span>
+                </div>
+                <div className="bg-[#121824]/80 p-4 rounded-xl border border-slate-800 space-y-2.5">
+                  <p className="text-xs font-semibold text-white">Primary Flag Driver:</p>
+                  <p className="text-xs font-mono text-cyan-300 bg-cyan-950/30 p-2 rounded border border-cyan-500/20">
+                    &ldquo;{selected.explainability?.primary_driver}&rdquo;
+                  </p>
+                  <div className="space-y-1 pt-1">
+                    {selected.explainability?.factors?.map((factor, idx) => (
+                      <div key={idx} className="flex items-start gap-2 text-[11px] text-slate-300">
+                        <CheckCircle2 size={13} className="text-emerald-400 shrink-0 mt-0.5" />
+                        <span>{factor}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Provides transparent, human-readable justification for flagged sessions, ensuring complete trust for compliance officers and regulatory bodies in banking and enterprise sectors.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
