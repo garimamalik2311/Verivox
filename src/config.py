@@ -23,7 +23,7 @@ VAD_AGGRESSIVENESS = 2       # 0 (lenient) to 3 (aggressive)
 NUM_MFCC = 13
 NUM_SPECTRAL = 5             # Centroid, Bandwidth, Rolloff, ZCR, RMS
 NUM_CHROMA = 12
-TOTAL_FEATURES = NUM_MFCC + NUM_SPECTRAL + NUM_CHROMA        # 30-D representation
+TOTAL_FEATURES = 58        # 58-D representation
 
 # --- Supported input formats ---
 SUPPORTED_FORMATS = (".wav", ".mp3", ".m4a", ".ogg", ".flac")

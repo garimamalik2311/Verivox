@@ -1,14 +1,12 @@
 """
-Sprint 2a — Model Selection
+Sprint 2a — Model Selection & Sprint 2b Sigmoid Calibration
 VeriVox: Real-time multilingual AI voice-cloning detection.
 
 Trains and compares:
-  - XGBoost (baseline + tuned)
+  - XGBoost (baseline + tuned 58-D + calibrated)
   - Random Forest
   - Logistic Regression
   - KNN
-
-Saves the tuned XGBoost model for Sprint 2b's /predict API.
 """
 
 import time
@@ -24,6 +22,7 @@ from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.calibration import CalibratedClassifierCV  # ADDED BY PERSON B
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
@@ -44,7 +43,7 @@ REPORTS.mkdir(exist_ok=True)
 # ---------------------------------------------------------------- 1. LOAD
 def load_data():
     print("=" * 70)
-    print("1. LOAD & INSPECT")
+    print("1. LOAD & INSPECT (58-D FEATURE ARRAYS)") # MODIFIED BY PERSON B
     print("=" * 70)
     X_train = np.load(PROCESSED / "X_train.npy")
     y_train = np.load(PROCESSED / "y_train.npy")
@@ -93,7 +92,8 @@ def eda(X_train, y_train):
     for pair in high_corr[:10]:
         print(f"  features {pair[0]} & {pair[1]}: r={pair[2]}")
 
-    fig, axes = plt.subplots(6, 5, figsize=(18, 14))
+    # MODIFIED BY PERSON B: Updated plot layout grid to 12x5 for 58 features
+    fig, axes = plt.subplots(12, 5, figsize=(18, 24))
     for i, ax in enumerate(axes.flat):
         if i >= X_train.shape[1]:
             ax.axis("off")
@@ -110,7 +110,7 @@ def eda(X_train, y_train):
 # ---------------------------------------------------------------- 3. BASELINE
 def xgboost_baseline(X_train, y_train, X_val, y_val):
     print("\n" + "=" * 70)
-    print("3. XGBOOST BASELINE (untuned)")
+    print("3. XGBOOST BASELINE (untuned 58-D)") # MODIFIED BY PERSON B
     print("=" * 70)
     clf = XGBClassifier(
         n_estimators=300,
@@ -237,30 +237,41 @@ def main():
     xgboost_baseline(X_train, y_train, X_val, y_val)
 
     tuned, best_params, best_score = tune_xgboost(X_train, y_train)
-    probs = tuned.predict_proba(X_val)[:, 1]
-    print(f"\nTuned model on val:")
-    print(classification_report(y_val, tuned.predict(X_val), digits=4))
+
+    # ADDED BY PERSON B: Sigmoid probability calibration on tuned 58-D XGBoost model
+    print("\n" + "=" * 70)
+    print("SIGMOID CALIBRATION (58-D MODEL)")
+    print("=" * 70)
+    calibrated_model = CalibratedClassifierCV(estimator=tuned, method="sigmoid", cv=5)
+    calibrated_model.fit(X_train, y_train)
+
+    probs = calibrated_model.predict_proba(X_val)[:, 1]
+    print(f"\nCalibrated model on val:")
+    print(classification_report(y_val, calibrated_model.predict(X_val), digits=4))
     print(f"Val ROC-AUC: {roc_auc_score(y_val, probs):.4f}")
 
-    # Evaluate tuned model on the test holdout
-    probs_test = tuned.predict_proba(X_test)[:, 1]
+    # Evaluate calibrated model on holdout test set
+    probs_test = calibrated_model.predict_proba(X_test)[:, 1]
     print("\n" + "=" * 70)
-    print("TUNED MODEL ON TEST HOLDOUT")
+    print("CALIBRATED 58-D MODEL ON TEST HOLDOUT") # MODIFIED BY PERSON B
     print("=" * 70)
-    print(classification_report(y_test, tuned.predict(X_test), digits=4))
+    print(classification_report(y_test, calibrated_model.predict(X_test), digits=4))
     print(f"Test ROC-AUC: {roc_auc_score(y_test, probs_test):.4f}")
 
-    # Save test probabilities for Sprint 2b calibration
+    # Save test probabilities for calibration checks
     np.save(REPORTS / "test_probs.npy", probs_test)
     np.save(REPORTS / "test_labels.npy", y_test)
     print(f"\nSaved {REPORTS / 'test_probs.npy'}")
     print(f"Saved {REPORTS / 'test_labels.npy'}")
 
-    # Save the tuned model for Sprint 2b
+    # MODIFIED BY PERSON B: Persist calibrated and tuned artifacts
+    joblib.dump(calibrated_model, REPORTS / "xgboost_58d_calibrated.joblib")
+    joblib.dump(calibrated_model, REPORTS / "xgboost_calibrated.joblib")
     joblib.dump(tuned, REPORTS / "xgboost_tuned.joblib")
     with open(REPORTS / "xgboost_best_params.json", "w") as f:
         json.dump({"best_params": best_params, "cv_roc_auc": best_score}, f, indent=2)
-    print(f"\nSaved {REPORTS / 'xgboost_tuned.joblib'}")
+    print(f"\nSaved {REPORTS / 'xgboost_58d_calibrated.joblib'}")
+    print(f"Saved {REPORTS / 'xgboost_tuned.joblib'}")
     print(f"Saved {REPORTS / 'xgboost_best_params.json'}")
 
     compare_models(X_train, y_train, X_val, y_val)
