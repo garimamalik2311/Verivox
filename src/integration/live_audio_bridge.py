@@ -16,11 +16,11 @@ import time
 import joblib
 import websockets
 
-from features import extract_features
-from mic_capture import MicrophoneStreamer
-from risk_engine.schemas import ModelPrediction
-from vad import VoiceActivityDetector
-from window_accumulator import WindowAccumulator
+from src.features import extract_features
+from src.mic_capture import MicrophoneStreamer
+from src.risk_engine.schemas import ModelPrediction
+from src.vad import VoiceActivityDetector
+from src.window_accumulator import WindowAccumulator
 
 
 MODEL_PATH = "reports/xgboost_calibrated.joblib"
