@@ -18,6 +18,16 @@ from src.window_accumulator import WindowAccumulator
 app = FastAPI()
 
 
+@app.get("/health")
+def health_check():
+    """Return backend health and model information."""
+    return {
+        "status": "ok",
+        "model_version": MODEL_VERSION,
+        "active_streams": len(stream_manager.active_streams()),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Model configuration
 # ---------------------------------------------------------------------------

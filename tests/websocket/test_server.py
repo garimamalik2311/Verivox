@@ -87,3 +87,14 @@ def test_stream_ownership_lifecycle():
 
     assert stream_id not in stream_owners
     assert stream_id not in stream_manager.active_streams()
+
+def test_health_check():
+    response = client.get("/health")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["status"] == "ok"
+    assert data["model_version"] == "sprint2a-xgb-v1-calibrated"
+    assert isinstance(data["active_streams"], int)
