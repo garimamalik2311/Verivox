@@ -1,11 +1,10 @@
-# Base image with Python + system audio deps
 FROM python:3.11-slim
 
-# FFmpeg handles conversion between WAV/MP3/M4A/OGG/FLAC before/around librosa
-# PortAudio is required by sounddevice for microphone access
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     portaudio19-dev \
+    gcc \
+    build-essential \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -15,5 +14,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
+COPY reports/xgboost_calibrated.joblib ./reports/xgboost_calibrated.joblib
 
-CMD ["python3", "src/pipeline.py"]
+EXPOSE 8000
+
+CMD ["uvicorn", "src.websocket.server:app", "--host", "0.0.0.0", "--port", "8000"]

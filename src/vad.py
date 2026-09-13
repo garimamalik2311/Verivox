@@ -13,7 +13,7 @@ non-speech/noise) so we only pass real speech into the windowing stage.
 import numpy as np
 import webrtcvad
 
-from config import SAMPLE_RATE, VAD_FRAME_MS, VAD_FRAME_SAMPLES, VAD_AGGRESSIVENESS
+from src.config import SAMPLE_RATE, VAD_FRAME_MS, VAD_FRAME_SAMPLES, VAD_AGGRESSIVENESS
 
 
 class VoiceActivityDetector:

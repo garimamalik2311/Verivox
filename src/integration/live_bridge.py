@@ -15,9 +15,9 @@ import time
 import joblib
 import websockets
 
-from features import extract_features
-from pipeline import process_file_with_timestamps
-from risk_engine.schemas import ModelPrediction
+from src.features import extract_features
+from src.pipeline import process_file_with_timestamps
+from src.risk_engine.schemas import ModelPrediction
 
 
 MODEL_PATH = "reports/xgboost_calibrated.joblib"

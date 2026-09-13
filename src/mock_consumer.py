@@ -17,7 +17,7 @@ you can test the full pipeline shape without their code.
 
 import numpy as np
 
-from config import SAMPLE_RATE, WINDOW_SIZE_SAMPLES
+from src.config import SAMPLE_RATE, WINDOW_SIZE_SAMPLES
 
 
 class ContractViolation(Exception):
@@ -79,7 +79,7 @@ def run_contract_test(filepath: str):
     vad -> window_accumulator) and feeds every resulting window through
     the mock consumer, exactly like Person B's real code eventually will.
     """
-    from pipeline import process_file
+    from src.pipeline import process_file
 
     print(f"Running contract test on: {filepath}\n")
     windows = process_file(filepath)
