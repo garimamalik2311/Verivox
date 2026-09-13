@@ -61,6 +61,29 @@ connected_clients: set[WebSocket] = set()
 # associated with the corresponding stream.
 client_stream_ids: dict[WebSocket, set[str]] = {}
 
+# Number of active WebSocket connections using each stream ID.
+stream_owners: dict[str, int] = {}
+
+def acquire_stream(stream_id: str) -> None:
+    """Register one active connection using a stream."""
+    stream_owners[stream_id] = stream_owners.get(stream_id, 0) + 1
+
+
+def release_stream(stream_id: str) -> None:
+    """
+    Release one connection's ownership of a stream.
+
+    Remove the Risk Engine only when no active connection
+    is still using that stream.
+    """
+    owners = stream_owners.get(stream_id, 0)
+
+    if owners <= 1:
+        stream_owners.pop(stream_id, None)
+        stream_manager.remove_stream(stream_id)
+    else:
+        stream_owners[stream_id] = owners - 1
+
 
 # ---------------------------------------------------------------------------
 # Helper: broadcast RiskResult
@@ -168,8 +191,10 @@ async def websocket_endpoint(websocket: WebSocket):
             # stream IDs, so we maintain a set.
             stream_id = prediction.stream_id
 
-            session_stream_ids.add(stream_id)
-            client_stream_ids[websocket].add(stream_id)
+            if stream_id not in session_stream_ids:
+                session_stream_ids.add(stream_id)
+                client_stream_ids[websocket].add(stream_id)
+                acquire_stream(stream_id)
 
             # ---------------------------------------------------------------
             # Risk Engine
@@ -244,7 +269,7 @@ async def websocket_endpoint(websocket: WebSocket):
         client_stream_ids.pop(websocket, None)
 
         for stream_id in session_stream_ids:
-            stream_manager.reset_stream(stream_id)
+            release_stream(stream_id)
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +302,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
         "browser_mic_001",
     )
 
+    acquire_stream(stream_id)
     vad = VoiceActivityDetector()
     accumulator = WindowAccumulator()
 
@@ -372,16 +398,6 @@ async def audio_websocket_endpoint(websocket: WebSocket):
 
                     start_time = time.perf_counter()
 
-                    features = extract_features(
-                        audio_window
-                    )
-
-                    if features.shape != (30,):
-                        raise ValueError(
-                            "Expected 30-D feature vector, "
-                            f"got {features.shape}"
-                        )
-
                     ai_probability, latency_ms = await asyncio.to_thread(
                         process_audio_window,
                         audio_window,
@@ -452,9 +468,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
     finally:
         accumulator.reset()
 
-        stream_manager.reset_stream(
-            stream_id
-        )
+        release_stream(stream_id)
 
         print(
             f"[audio] Stream reset: "
