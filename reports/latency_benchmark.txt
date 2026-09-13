@@ -1,0 +1,7 @@
+Latency benchmark (calibrated model, 1000 single-window predictions)
+p50: 3.491 ms
+p95: 14.650 ms
+p99: 18.491 ms
+mean: 4.852 ms
+
+For comparison, Sprint 1's VAD stage measured 2.96 ms.

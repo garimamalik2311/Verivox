@@ -43,3 +43,17 @@ uvicorn[standard]
 websockets
 
 httpx2
+
+# Dataset Download & Streaming
+datasets==5.0.1
+huggingface-hub==1.30.0
+
+# Data Indexing & Validation Splitting
+pandas==3.0.5
+tqdm==4.70.0
+
+# Classifier Training
+torchcodec>=0.16.0
+
+# Visualization (EDA plots in train_model.py)
+matplotlib>=3.8.0

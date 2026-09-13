@@ -2,69 +2,77 @@ import os
 import numpy as np
 import pandas as pd
 import librosa
+from sklearn.model_selection import StratifiedGroupKFold
 from tqdm import tqdm
-from sklearn.model_selection import GroupShuffleSplit
-from src.config import SAMPLE_RATE, WINDOW_STRIDE_SAMPLES, WINDOW_SIZE_SAMPLES
 from src.features import extract_features
+from src.config import SAMPLE_RATE, WINDOW_STRIDE_SAMPLES
 
 def slice_and_extract(filepath: str):
+    """Loads audio and extracts 30-D features from 1-second sliding windows."""
     try:
         y, _ = librosa.load(filepath, sr=SAMPLE_RATE, mono=True)
-    except Exception as e:
-        print(f"Skipping corrupt audio {filepath}: {e}")
+    except Exception:
+        return []
+    if len(y) < SAMPLE_RATE:
         return []
 
-    if len(y) < WINDOW_SIZE_SAMPLES:
-        return []
+    feats = []
+    # 1s window (SAMPLE_RATE samples) with stride (WINDOW_STRIDE_SAMPLES = 8,000 samples)
+    for start in range(0, len(y) - SAMPLE_RATE + 1, WINDOW_STRIDE_SAMPLES):
+        chunk = y[start:start + SAMPLE_RATE]
+        feats.append(extract_features(chunk))
+    return feats
 
-    features = []
-    for start in range(0, len(y) - WINDOW_SIZE_SAMPLES + 1, WINDOW_STRIDE_SAMPLES):
-        window = y[start:start + WINDOW_SIZE_SAMPLES]
-        features.append(extract_features(window))
-    return features
+def run(manifest_csv: str = "data/processed/manifest.csv"):
+    df = pd.read_csv(manifest_csv)
 
-def generate_splits(manifest_path: str = "data/processed/manifest.csv"):
-    if not os.path.exists(manifest_path):
-        print(f"Manifest {manifest_path} not found. Run dataset_indexer.py first.")
-        return
+    # Balance across both language ('en', 'hi') and label (0, 1)
+    df["strat_key"] = df["label"].astype(str) + "_" + df["language"].astype(str)
 
-    df = pd.read_csv(manifest_path)
-    if len(df) == 0:
-        print("Manifest is empty. Add audio files to data/raw/")
-        return
+    # 1. Carve out a ~15% holdout test set (stratified + speaker-disjoint)
+    sgkf_test = StratifiedGroupKFold(n_splits=7, shuffle=True, random_state=42)
+    train_val_idx, test_idx = next(sgkf_test.split(df, y=df["strat_key"], groups=df["speaker_id"]))
 
-    # 80/20 Speaker-Disjoint Split
-    gss = GroupShuffleSplit(n_splits=1, train_size=0.8, random_state=42)
-    train_idx, val_idx = next(gss.split(df, groups=df['speaker_id']))
+    train_val_df = df.iloc[train_val_idx].reset_index(drop=True)
+    test_df = df.iloc[test_idx].reset_index(drop=True)
 
-    splits = {
-        'train': df.iloc[train_idx],
-        'val': df.iloc[val_idx]
-    }
+    # 2. Split remainder into Train (~70%) and Val (~15%)
+    sgkf_val = StratifiedGroupKFold(n_splits=6, shuffle=True, random_state=42)
+    train_idx, val_idx = next(sgkf_val.split(train_val_df, y=train_val_df["strat_key"], groups=train_val_df["speaker_id"]))
 
-    # Verify zero speaker overlap
-    overlap = set(splits['train']['speaker_id']).intersection(set(splits['val']['speaker_id']))
-    assert len(overlap) == 0, f"Speaker leakage detected: {overlap}"
+    train_df = train_val_df.iloc[train_idx].reset_index(drop=True)
+    val_df = train_val_df.iloc[val_idx].reset_index(drop=True)
 
-    for split_name, split_df in splits.items():
+    # Sanity check: zero speaker leakage across splits
+    spk_train = set(train_df['speaker_id'])
+    spk_val = set(val_df['speaker_id'])
+    spk_test = set(test_df['speaker_id'])
+    assert len(spk_train & spk_val) == 0, "Speaker leakage between Train and Val!"
+    assert len(spk_train & spk_test) == 0, "Speaker leakage between Train and Test!"
+    assert len(spk_val & spk_test) == 0, "Speaker leakage between Val and Test!"
+
+    splits = [("train", train_df), ("val", val_df), ("test", test_df)]
+    for name, split_df in splits:
         X, y = [], []
-        print(f"\nExtracting features for {split_name} split ({len(split_df)} files)...")
+        print(f"\nProcessing {name} split ({len(split_df)} files)...")
         for _, row in tqdm(split_df.iterrows(), total=len(split_df)):
-            window_feats = slice_and_extract(row['filepath'])
-            for feat in window_feats:
-                X.append(feat)
-                y.append(row['label'])
+            windows = slice_and_extract(row["filepath"])
+            for vec in windows:
+                X.append(vec)
+                y.append(row["label"])
 
-        np.save(f"data/processed/X_{split_name}.npy", np.array(X, dtype=np.float32))
-        np.save(f"data/processed/y_{split_name}.npy", np.array(y, dtype=np.int64))
+        X_arr = np.array(X, dtype=np.float32)
+        y_arr = np.array(y, dtype=np.int64)
+        np.save(f"data/processed/X_{name}.npy", X_arr)
+        np.save(f"data/processed/y_{name}.npy", y_arr)
+        print(f"Saved {name}: {X_arr.shape} windows, Balance (0:Real, 1:Fake): {np.bincount(y_arr)}")
 
-    # Fast iteration test set (first 100 samples)
-    if os.path.exists("data/processed/X_val.npy") and len(np.load("data/processed/X_val.npy")) > 0:
-        X_val = np.load("data/processed/X_val.npy")
-        y_val = np.load("data/processed/y_val.npy")
-        np.save("data/processed/X_test_mini.npy", X_val[:100])
-        np.save("data/processed/y_test_mini.npy", y_val[:100])
-        print("\nPre-cached X_train.npy, y_train.npy, X_val.npy, and mini-test sets.")
+    # Backward compatibility: save 100-sample mini slice for quick iteration
+    X_test = np.load("data/processed/X_test.npy")
+    y_test = np.load("data/processed/y_test.npy")
+    np.save("data/processed/X_test_mini.npy", X_test[:100])
+    np.save("data/processed/y_test_mini.npy", y_test[:100])
+    print("\nAll arrays successfully pre-cached in data/processed/")
 
 if __name__ == "__main__":
-    generate_splits()
+    run()
