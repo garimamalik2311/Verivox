@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 
@@ -45,31 +46,60 @@ VAD_FRAME_SAMPLES = 320
 stream_manager = StreamManager()
 
 
-# Clients connected to /ws receive RiskResult broadcasts.
+# Clients connected to /ws receive RiskResult messages for the
+# stream IDs associated with their connection.
 connected_clients: set[WebSocket] = set()
+
+# Maps each /ws client to the stream IDs it has submitted.
+#
+# Example:
+#
+#     client_a -> {"pytest_high_stream_v4"}
+#     client_b -> {"pytest_low_stream_v4"}
+#
+# This allows RiskResult messages to be routed only to clients
+# associated with the corresponding stream.
+client_stream_ids: dict[WebSocket, set[str]] = {}
 
 
 # ---------------------------------------------------------------------------
 # Helper: broadcast RiskResult
 # ---------------------------------------------------------------------------
 
-async def broadcast_result(result) -> None:
+async def broadcast_result(result, exclude: WebSocket | None = None) -> None:
     """
-    Broadcast a RiskResult to every connected /ws dashboard client.
+    Send a RiskResult only to /ws clients associated with the
+    result's stream_id.
 
-    Disconnected clients are removed from the shared client set.
+    This prevents results from one persistent stream leaking
+    into another client's WebSocket connection.
+
+    Disconnected clients are removed from the shared client set
+    and stream mapping.
     """
 
-    disconnected_clients = set()
+    disconnected_clients: set[WebSocket] = set()
+
+    result_stream_id = result.stream_id
 
     for client in connected_clients:
+        if client is exclude:
+            continue
+
+        subscribed_streams = client_stream_ids.get(client, set())
+
+        if result_stream_id not in subscribed_streams:
+            continue
+
         try:
             await client.send_json(result.model_dump())
 
         except Exception:
             disconnected_clients.add(client)
 
-    connected_clients.difference_update(disconnected_clients)
+    for client in disconnected_clients:
+        connected_clients.discard(client)
+        client_stream_ids.pop(client, None)
 
 
 # ---------------------------------------------------------------------------
@@ -83,15 +113,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
     Flow:
 
-    ModelPrediction
-        -> Risk Engine
-        -> RiskResult
-        -> broadcast to connected dashboard clients
+        ModelPrediction
+            -> Risk Engine
+            -> RiskResult
+            -> route only to clients subscribed to that stream
     """
 
     await websocket.accept()
 
     connected_clients.add(websocket)
+    client_stream_ids[websocket] = set()
 
     session_stream_ids = set()
 
@@ -131,7 +162,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 continue
 
-            session_stream_ids.add(prediction.stream_id)
+            # Register this stream against this WebSocket.
+            #
+            # A single WebSocket may submit predictions for multiple
+            # stream IDs, so we maintain a set.
+            stream_id = prediction.stream_id
+
+            session_stream_ids.add(stream_id)
+            client_stream_ids[websocket].add(stream_id)
 
             # ---------------------------------------------------------------
             # Risk Engine
@@ -139,6 +177,16 @@ async def websocket_endpoint(websocket: WebSocket):
 
             try:
                 result = stream_manager.update(prediction)
+
+                print(
+                    f"[ws] stream={prediction.stream_id} "
+                    f"window={prediction.window_id} "
+                    f"prob={prediction.ai_probability:.2f} "
+                    f"rolling={result.rolling_score:.2f} "
+                    f"flags={result.consecutive_flags} "
+                    f"risk={result.risk_level.value} "
+                    f"alert={result.alert_triggered}"
+                )
 
             except ValueError as e:
                 await websocket.send_json(
@@ -150,16 +198,50 @@ async def websocket_endpoint(websocket: WebSocket):
                 continue
 
             # ---------------------------------------------------------------
-            # Broadcast RiskResult
+            # Route RiskResult
             # ---------------------------------------------------------------
 
-            await broadcast_result(result)
+            # Send directly to the originating client.
+            #
+            # This guarantees that the client immediately receives
+            # the result for the prediction it submitted.
+            await websocket.send_json(result.model_dump())
+            await broadcast_result(result, exclude=websocket)
+
+            # Route the result to other /ws clients subscribed to
+            # the same stream.
+            #
+            # broadcast_result() intentionally does NOT exclude the
+            # originating client because the direct send above is needed
+            # and broadcast_result would otherwise duplicate it.
+            #
+            # Therefore, we temporarily route only to other clients below.
+            for client in list(connected_clients):
+
+                if client is websocket:
+                    continue
+
+                subscribed_streams = client_stream_ids.get(
+                    client,
+                    set(),
+                )
+
+                if result.stream_id not in subscribed_streams:
+                    continue
+
+                try:
+                    await client.send_json(result.model_dump())
+
+                except Exception:
+                    connected_clients.discard(client)
+                    client_stream_ids.pop(client, None)
 
     except WebSocketDisconnect:
         print("Client disconnected")
 
     finally:
         connected_clients.discard(websocket)
+        client_stream_ids.pop(websocket, None)
 
         for stream_id in session_stream_ids:
             stream_manager.reset_stream(stream_id)
@@ -176,16 +258,16 @@ async def audio_websocket_endpoint(websocket: WebSocket):
 
     Flow:
 
-    Browser microphone
-        -> PCM16 audio
-        -> VAD
-        -> speech windows
-        -> 30-D features
-        -> calibrated XGBoost
-        -> ModelPrediction
-        -> Risk Engine
-        -> RiskResult
-        -> dashboard broadcast
+        Browser microphone
+            -> PCM16 audio
+            -> VAD
+            -> speech windows
+            -> 30-D features
+            -> calibrated XGBoost
+            -> ModelPrediction
+            -> Risk Engine
+            -> RiskResult
+            -> dashboard broadcast
     """
 
     await websocket.accept()
@@ -300,16 +382,10 @@ async def audio_websocket_endpoint(websocket: WebSocket):
                             f"got {features.shape}"
                         )
 
-                    ai_probability = float(
-                        model.predict_proba(
-                            features.reshape(1, -1)
-                        )[0, 1]
+                    ai_probability, latency_ms = await asyncio.to_thread(
+                        process_audio_window,
+                        audio_window,
                     )
-
-                    inference_latency_ms = (
-                        time.perf_counter()
-                        - start_time
-                    ) * 1000.0
 
                     # -------------------------------------------------------
                     # Create canonical ModelPrediction
@@ -344,20 +420,20 @@ async def audio_websocket_endpoint(websocket: WebSocket):
                         f"flags={result.consecutive_flags} "
                         f"risk={result.risk_level.value} "
                         f"alert={result.alert_triggered} "
-                        f"inference={inference_latency_ms:.2f}ms"
+                        f"inference={latency_ms:.2f}ms"
                     )
 
                     # -------------------------------------------------------
                     # Send RiskResult back to the audio client
-                    # ---------------------------------------------------------------
+                    # -------------------------------------------------------
 
                     await websocket.send_json(
                         result.model_dump()
                     )
 
-                    # ---------------------------------------------------------------
+                    # -------------------------------------------------------
                     # Broadcast RiskResult to dashboard clients
-                    # ---------------------------------------------------------------
+                    # -------------------------------------------------------
 
                     await broadcast_result(result)
 
@@ -384,3 +460,39 @@ async def audio_websocket_endpoint(websocket: WebSocket):
             f"[audio] Stream reset: "
             f"stream_id={stream_id}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Audio model inference
+# ---------------------------------------------------------------------------
+
+def process_audio_window(
+    audio_window: np.ndarray,
+) -> tuple[float, float]:
+    """
+    Extract features and run the calibrated XGBoost model.
+
+    This function is intentionally synchronous because it is executed
+    inside asyncio.to_thread() from the WebSocket handler.
+    """
+
+    start_time = time.perf_counter()
+
+    features = extract_features(audio_window)
+
+    if features.shape != (30,):
+        raise ValueError(
+            f"Expected 30-D feature vector, got {features.shape}"
+        )
+
+    ai_probability = float(
+        model.predict_proba(
+            features.reshape(1, -1)
+        )[0, 1]
+    )
+
+    latency_ms = (
+        time.perf_counter() - start_time
+    ) * 1000.0
+
+    return ai_probability, latency_ms
