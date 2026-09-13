@@ -21,7 +21,7 @@ VALID_REQUEST = {
 
 def test_all_zero_features():
     """All-zero features: what does the model output? Should NOT crash."""
-    response = client.post("/predict", json={**VALID_REQUEST, "features": [0.0] * 30})
+    response = client.post("/predict", json={**VALID_REQUEST, "features": [0.0] * 58})
     assert response.status_code == 200
     prob = response.json()["ai_probability"]
     print(f"\n[all-zero features] status=200, ai_probability={prob:.4f}")
@@ -31,7 +31,7 @@ def test_all_zero_features():
 
 def test_very_large_features():
     """Very large, out-of-training-distribution values. Should NOT crash."""
-    response = client.post("/predict", json={**VALID_REQUEST, "features": [1e6] * 30})
+    response = client.post("/predict", json={**VALID_REQUEST, "features": [1e6] * 58})
     assert response.status_code == 200
     prob = response.json()["ai_probability"]
     print(f"[very large features] status=200, ai_probability={prob:.4f}")
@@ -42,7 +42,7 @@ def test_all_nan_features():
     # Python's json module supports NaN as a non-standard extension, and
     # httpx/starlette will serialize it correctly for this internal test client.
 
-    raw_body = json.dumps({**VALID_REQUEST, "features": [float("nan")] * 30})
+    raw_body = json.dumps({**VALID_REQUEST, "features": [float("nan")] * 58})
     response = client.post(
         "/predict",
         content=raw_body,
@@ -54,7 +54,7 @@ def test_all_nan_features():
 
 def test_wrong_feature_count():
     """Wrong number of features: must be REJECTED with 400."""
-    response = client.post("/predict", json={**VALID_REQUEST, "features": [0.1, 0.2, 0.3]})
+    response = client.post("/predict", json={**VALID_REQUEST, "features": [0.1, 0.2, 0.3] * 19})  # 57 features
     assert response.status_code == 400
     print(f"[wrong feature count] status=400, detail={response.json()['detail']}")
 

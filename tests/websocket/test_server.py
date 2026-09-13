@@ -96,5 +96,5 @@ def test_health_check():
     data = response.json()
 
     assert data["status"] == "ok"
-    assert data["model_version"] == "sprint2a-xgb-v1-calibrated"
+    assert data["model_version"] == "sprint2b-xgb-58d-calibrated"
     assert isinstance(data["active_streams"], int)

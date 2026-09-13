@@ -18,10 +18,10 @@ logger = logging.getLogger("verivox.predict")
 app = FastAPI(title="VeriVox /predict")
 
 # Load once at startup, not per-request
-model = joblib.load("reports/xgboost_calibrated.joblib")
+model = joblib.load("reports/xgboost_58d_calibrated.joblib")
 
-FEATURE_LENGTH = 30
-MODEL_VERSION = "sprint2a-xgb-v1-calibrated"
+FEATURE_LENGTH = 58
+MODEL_VERSION = "sprint2b-xgb-58d-calibrated"
 
 
 class WindowRequest(BaseModel):

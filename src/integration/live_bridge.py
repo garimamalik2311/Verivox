@@ -5,7 +5,7 @@ Connects the Sprint 1 file pipeline to the Sprint 2B calibrated classifier
 and sends ModelPrediction messages to the Sprint 3B WebSocket Risk Engine.
 
 Flow:
-audio file -> VAD -> speech windows -> 30-D features
+audio file -> VAD -> speech windows -> 58-D features
 -> calibrated XGBoost -> ModelPrediction -> WebSocket -> Risk Engine
 """
 
@@ -20,8 +20,8 @@ from src.pipeline import process_file_with_timestamps
 from src.risk_engine.schemas import ModelPrediction
 
 
-MODEL_PATH = "reports/xgboost_calibrated.joblib"
-MODEL_VERSION = "sprint2a-xgb-v1-calibrated"
+MODEL_PATH = "reports/xgboost_58d_calibrated.joblib"
+MODEL_VERSION = "sprint2b-xgb-58d-calibrated"
 
 WEBSOCKET_URL = "ws://127.0.0.1:8000/ws"
 
@@ -57,9 +57,9 @@ async def run_file_bridge(filepath: str) -> None:
 
             features = extract_features(audio_window)
 
-            if features.shape != (30,):
+            if features.shape != (58,):
                 raise ValueError(
-                    f"Expected 30-D feature vector, got {features.shape}"
+                    f"Expected 58-D feature vector, got {features.shape}"
                 )
 
             ai_probability = float(

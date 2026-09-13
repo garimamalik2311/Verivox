@@ -5,7 +5,7 @@ Connects the live microphone to the Sprint 2B calibrated classifier
 and sends ModelPrediction messages to the Sprint 3B WebSocket Risk Engine.
 
 Flow:
-microphone -> VAD -> speech windows -> 30-D features
+microphone -> VAD -> speech windows -> 58-D features
 -> calibrated XGBoost -> ModelPrediction -> WebSocket -> Risk Engine
 """
 
@@ -23,8 +23,8 @@ from src.vad import VoiceActivityDetector
 from src.window_accumulator import WindowAccumulator
 
 
-MODEL_PATH = "reports/xgboost_calibrated.joblib"
-MODEL_VERSION = "sprint2a-xgb-v1-calibrated"
+MODEL_PATH = "reports/xgboost_58d_calibrated.joblib"
+MODEL_VERSION = "sprint2b-xgb-58d-calibrated"
 
 WEBSOCKET_URL = "ws://127.0.0.1:8000/ws"
 
@@ -76,12 +76,12 @@ async def run_live_audio_bridge() -> None:
 
                     start_time = time.perf_counter()
 
-                    # Extract the exact 30-D feature vector.
+                    # Extract the exact 58-D feature vector.
                     features = extract_features(audio_window)
 
-                    if features.shape != (30,):
+                    if features.shape != (58,):
                         raise ValueError(
-                            f"Expected 30-D feature vector, got {features.shape}"
+                            f"Expected 58-D feature vector, got {features.shape}"
                         )
 
                     # Calibrated XGBoost inference.

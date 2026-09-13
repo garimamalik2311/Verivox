@@ -33,8 +33,8 @@ def health_check():
 # Model configuration
 # ---------------------------------------------------------------------------
 
-MODEL_PATH = "reports/xgboost_calibrated.joblib"
-MODEL_VERSION = "sprint2a-xgb-v1-calibrated"
+MODEL_PATH = "reports/xgboost_58d_calibrated.joblib"
+MODEL_VERSION = "sprint2b-xgb-58d-calibrated"
 
 model = joblib.load(MODEL_PATH)
 
@@ -263,7 +263,7 @@ async def audio_websocket_endpoint(websocket: WebSocket):
             -> PCM16 audio
             -> VAD
             -> speech windows
-            -> 30-D features
+            -> 58-D features
             -> calibrated XGBoost
             -> ModelPrediction
             -> Risk Engine
@@ -481,9 +481,9 @@ def process_audio_window(
 
     features = extract_features(audio_window)
 
-    if features.shape != (30,):
+    if features.shape != (58,):
         raise ValueError(
-            f"Expected 30-D feature vector, got {features.shape}"
+            f"Expected 58-D feature vector, got {features.shape}"
         )
 
     ai_probability = float(
