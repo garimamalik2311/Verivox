@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  ChevronDown,
   CircleHelp,
   Gauge,
   History,
@@ -34,7 +33,17 @@ const initialStreams = {
     ai_probability: 0.87,
     model_version: 'xgb_v1',
     feature_latency_ms: 3.8,
-    lastSeen: 'Just now'
+    lastSeen: 'Just now',
+    call_duration: '00:01:12',
+    timeSeries: [
+      { time: '0s', prob: 5 },
+      { time: '10s', prob: 18 },
+      { time: '20s', prob: 22 },
+      { time: '30s', prob: 48 },
+      { time: '40s', prob: 78 },
+      { time: '50s', prob: 75 },
+      { time: '60s', prob: 87 },
+    ]
   },
   'call_002': {
     stream_id: 'call_002',
@@ -48,7 +57,15 @@ const initialStreams = {
     ai_probability: 0.12,
     model_version: 'xgb_v1',
     feature_latency_ms: 4.1,
-    lastSeen: '12 sec ago'
+    lastSeen: '12 sec ago',
+    call_duration: '00:00:45',
+    timeSeries: [
+      { time: '0s', prob: 10 },
+      { time: '10s', prob: 15 },
+      { time: '20s', prob: 12 },
+      { time: '30s', prob: 18 },
+      { time: '40s', prob: 12 },
+    ]
   },
   'call_003': {
     stream_id: 'call_003',
@@ -62,7 +79,13 @@ const initialStreams = {
     ai_probability: null,
     model_version: 'xgb_v1',
     feature_latency_ms: 3.5,
-    lastSeen: '28 sec ago'
+    lastSeen: '28 sec ago',
+    call_duration: '00:02:10',
+    timeSeries: [
+      { time: '0s', prob: 30 },
+      { time: '30s', prob: 45 },
+      { time: '60s', prob: 52 },
+    ]
   }
 }
 
@@ -118,10 +141,20 @@ export default function App() {
         const data = JSON.parse(event.data)
         if (data.stream_id) {
           const streamId = data.stream_id
-          setStreams((prev) => ({
-            ...prev,
-            [streamId]: { ...prev[streamId], ...data, name: prev[streamId]?.name || streamId }
-          }))
+          setStreams((prev) => {
+            const existing = prev[streamId] || {}
+            const newProb = data.ai_probability ?? existing.ai_probability ?? 0.5
+            const newTsEntry = { time: `${(existing.timeSeries?.length || 0) * 10}s`, prob: Math.round(newProb * 100) }
+            return {
+              ...prev,
+              [streamId]: { 
+                ...existing, 
+                ...data, 
+                name: existing.name || streamId,
+                timeSeries: [...(existing.timeSeries || []), newTsEntry]
+              }
+            }
+          })
           setStreamHistories((prev) => {
             const currentHistory = prev[streamId] || []
             const newEntry = {
@@ -181,6 +214,10 @@ export default function App() {
       const newRolling = Number((currentScore * 0.7 + newProb * 0.3).toFixed(3))
       const risk = newRolling > 0.7 ? 'HIGH' : newRolling > 0.4 ? 'MEDIUM' : 'LOW'
       const alertActive = risk === 'HIGH'
+      const updatedTimeSeries = [
+        ...(current.timeSeries || []),
+        { time: `${((current.timeSeries?.length || 0) + 1) * 5}s`, prob: Math.round(newProb * 100) }
+      ]
 
       return {
         ...prev,
@@ -198,7 +235,8 @@ export default function App() {
           alert_reason: alertActive ? `Rolling threshold crossed (${newRolling} > 0.70) at Win #${windowId}` : null,
           speech_detected: speechDetected,
           speech: speechDetected,
-          lastSeen: 'Just now'
+          lastSeen: 'Just now',
+          timeSeries: updatedTimeSeries
         }
       }
     })
@@ -220,6 +258,144 @@ export default function App() {
     })
 
     setWindowId((prev) => prev + 1)
+  }
+
+  // Helper SVG generator for the real-time probability curve matching user picture
+  const renderLiveGraph = (timeSeries = []) => {
+    const points = timeSeries.length > 0 ? timeSeries : [{ time: '0s', prob: 10 }, { time: '60s', prob: 50 }]
+    const width = 600
+    const height = 240
+    const padding = 30
+
+    const maxProb = 100
+    const coords = points.map((p, idx) => {
+      const x = padding + (idx / (Math.max(points.length - 1, 1))) * (width - padding * 2)
+      const y = height - padding - (p.prob / maxProb) * (height - padding * 2)
+      return { x, y, ...p }
+    })
+
+    const pathString = coords.reduce((acc, curr, idx) => (idx === 0 ? `M ${curr.x} ${curr.y}` : `${acc} L ${curr.x} ${curr.y}`), '')
+    const areaString = `${pathString} L ${coords[coords.length - 1].x} ${height - padding} L ${coords[0].x} ${height - padding} Z`
+
+    // 71.7% threshold line Y position
+    const thresholdY = height - padding - (71.7 / maxProb) * (height - padding * 2)
+
+    return (
+      <div className="relative w-full overflow-hidden rounded-xl bg-[#090d16] border border-slate-800/80 p-4">
+        {/* Top Header of Card matching image */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-white tracking-tight">Synthetic Voice Probability (Real-time)</span>
+          </div>
+          <div className="flex items-center gap-3 font-mono text-xs">
+            <span className="flex items-center gap-1.5 bg-rose-500/10 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-full">
+              <span className="size-2 rounded-full bg-rose-500 animate-pulse" /> LIVE
+            </span>
+            <span className="text-slate-300">{selected.name || activeStreamId}</span>
+            <span className="text-slate-500">|</span>
+            <span className="text-cyan-400">{selected.call_duration || '00:01:12'}</span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4 items-center">
+          {/* SVG Graph Canvas */}
+          <div className="relative h-[220px] w-full">
+            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+              <defs>
+                <linearGradient id="probGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.35" />
+                  <stop offset="100%" stopColor="#f43f5e" stopOpacity="0.0" />
+                </linearGradient>
+              </defs>
+
+              {/* Background Horizontal Grid Lines */}
+              {[0, 25, 50, 75, 100].map((val) => {
+                const y = height - padding - (val / maxProb) * (height - padding * 2)
+                return (
+                  <g key={val}>
+                    <line x1={padding} y1={y} x2={width - padding} y2={y} stroke="#1e293b" strokeDasharray="3 3" strokeWidth="1" />
+                    <text x={padding - 8} y={y + 3} fill="#64748b" fontSize="10" textAnchor="end" className="font-mono">
+                      {val}%
+                    </text>
+                  </g>
+                )
+              })}
+
+              {/* Threshold Line (71.7%) */}
+              <line x1={padding} y1={thresholdY} x2={width - padding} y2={thresholdY} stroke="#22d3ee" strokeDasharray="4 4" strokeWidth="1.5" />
+
+              {/* Area fill */}
+              <path d={areaString} fill="url(#probGradient)" />
+
+              {/* Main Line */}
+              <path d={pathString} fill="none" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+
+              {/* Data points & Pulsing indicator on the latest point */}
+              {coords.map((pt, idx) => {
+                const isLast = idx === coords.length - 1
+                return (
+                  <g key={idx}>
+                    <circle cx={pt.x} cy={pt.y} r={isLast ? 5 : 3} className={isLast ? 'fill-rose-500 animate-ping' : 'fill-rose-400'} />
+                    <circle cx={pt.x} cy={pt.y} r={isLast ? 4 : 2} className="fill-white" />
+                  </g>
+                )
+              })}
+            </svg>
+
+            {/* Floating Callout box like in user's design image */}
+            {coords.length > 0 && (
+              <div 
+                className="absolute z-10 hidden sm:block bg-[#120d16] border border-rose-500/50 rounded-xl px-3 py-2 shadow-2xl pointer-events-none"
+                style={{ 
+                  top: '15%', 
+                  right: '15%' 
+                }}
+              >
+                <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-rose-400">
+                  <span>{coords[coords.length - 1].prob}%</span>
+                </div>
+                <div className="text-[10px] text-slate-300 font-mono">Synthetic voice detected</div>
+                <div className="text-[9px] text-slate-500 font-mono">{selected.call_duration || '00:01:12'}</div>
+              </div>
+            )}
+
+            {/* X-Axis labels */}
+            <div className="flex justify-between px-7 text-[10px] font-mono text-slate-500 mt-1">
+              <span>0s</span>
+              <span>10s</span>
+              <span>20s</span>
+              <span>30s</span>
+              <span>40s</span>
+              <span>50s</span>
+              <span>60s+</span>
+            </div>
+          </div>
+
+          {/* Right Side Stats Panel matching user picture */}
+          <div className="rounded-xl border border-slate-800 bg-[#0c1017] p-4 flex flex-col justify-between">
+            <div>
+              <p className="text-xs text-slate-400 font-mono">Current Probability</p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <span className="text-4xl font-black font-mono text-rose-500">
+                  {Math.round((selected.ai_probability ?? selected.rolling_score ?? 0.5) * 100)}%
+                </span>
+              </div>
+              <div className="mt-3">
+                <span className="inline-block rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-[11px] font-bold text-rose-400 uppercase tracking-wider">
+                  {selected.risk_level || 'HIGH'} RISK
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-800/80">
+              <p className="text-xs text-slate-300 font-mono leading-relaxed">
+                <span className="font-bold text-cyan-400">{selected.consecutive_flags || 3} consecutive</span> high-probability segments detected
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -277,6 +453,11 @@ export default function App() {
               <p className="mt-3 max-w-2xl leading-7 text-slate-400 text-sm">
                 VeriVox checks live audio for signs of an AI-generated voice. Select a conversation to inspect safety status and test telemetry injection.
               </p>
+            </section>
+
+            {/* Real-time Streaming Probability Waveform Element (Matching User Image) */}
+            <section className="space-y-4">
+              {renderLiveGraph(selected.timeSeries)}
             </section>
 
             {selected.alert_triggered && (
