@@ -243,34 +243,6 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_json(result.model_dump())
             await broadcast_result(result, exclude=websocket)
 
-            # Route the result to other /ws clients subscribed to
-            # the same stream.
-            #
-            # broadcast_result() intentionally does NOT exclude the
-            # originating client because the direct send above is needed
-            # and broadcast_result would otherwise duplicate it.
-            #
-            # Therefore, we temporarily route only to other clients below.
-            for client in list(connected_clients):
-
-                if client is websocket:
-                    continue
-
-                subscribed_streams = client_stream_ids.get(
-                    client,
-                    set(),
-                )
-
-                if result.stream_id not in subscribed_streams:
-                    continue
-
-                try:
-                    await client.send_json(result.model_dump())
-
-                except Exception:
-                    connected_clients.discard(client)
-                    client_stream_ids.pop(client, None)
-
     except WebSocketDisconnect:
         print("Client disconnected")
 
