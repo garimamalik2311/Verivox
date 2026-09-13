@@ -267,7 +267,7 @@ export default function App() {
       ws.close()
       stopMicIngestion()
     }
-  }, [windowId])
+  }, [])
 
   // Toggle live browser mic ingestion for real-time waveform display
   const toggleMicIngestion = async () => {
