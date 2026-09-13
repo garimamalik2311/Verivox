@@ -216,7 +216,7 @@ export default function App() {
   const currentHistory = streamHistories[activeStreamId] || []
 
   useEffect(() => {
-    const ws = new WebSocket('ws://localhost:8000/ws')
+    const ws = new WebSocket(import.meta.env.VITE_RISK_WS_URL || 'ws://localhost:8000/ws')
     wsRef.current = ws
 
     ws.onopen = () => setIsConnected(true)
