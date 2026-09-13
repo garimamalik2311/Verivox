@@ -11,10 +11,10 @@ def test_feature_extraction_latency():
     for _ in range(15):
         vec = extract_features(dummy_audio)
 
-    # Verification: Confirm vector returned matches Person B's 58-D layout
+    # Verification: Confirm vector returned matches 58-D layout
     assert vec.shape == (TOTAL_FEATURES,), f"Expected shape ({TOTAL_FEATURES},), got {vec.shape}"
 
-    # 3. Benchmark loop over 100 iterations[cite: 4]
+    # 3. Benchmark loop over 100 iterations
     iterations = 100
     start = time.perf_counter()
     for _ in range(iterations):

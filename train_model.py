@@ -22,7 +22,7 @@ from xgboost import XGBClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.calibration import CalibratedClassifierCV  # ADDED BY PERSON B
+from sklearn.calibration import CalibratedClassifierCV  # line added for sigmoid calibration
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.model_selection import GridSearchCV
@@ -43,7 +43,7 @@ REPORTS.mkdir(exist_ok=True)
 # ---------------------------------------------------------------- 1. LOAD
 def load_data():
     print("=" * 70)
-    print("1. LOAD & INSPECT (58-D FEATURE ARRAYS)") # MODIFIED BY PERSON B
+    print("1. LOAD & INSPECT (58-D FEATURE ARRAYS)") # 58-D feature arrays added
     print("=" * 70)
     X_train = np.load(PROCESSED / "X_train.npy")
     y_train = np.load(PROCESSED / "y_train.npy")
@@ -92,7 +92,7 @@ def eda(X_train, y_train):
     for pair in high_corr[:10]:
         print(f"  features {pair[0]} & {pair[1]}: r={pair[2]}")
 
-    # MODIFIED BY PERSON B: Updated plot layout grid to 12x5 for 58 features
+    # Updated plot layout grid to 12x5 for 58 features
     fig, axes = plt.subplots(12, 5, figsize=(18, 24))
     for i, ax in enumerate(axes.flat):
         if i >= X_train.shape[1]:
@@ -110,7 +110,7 @@ def eda(X_train, y_train):
 # ---------------------------------------------------------------- 3. BASELINE
 def xgboost_baseline(X_train, y_train, X_val, y_val):
     print("\n" + "=" * 70)
-    print("3. XGBOOST BASELINE (untuned 58-D)") # MODIFIED BY PERSON B
+    print("3. XGBOOST BASELINE (untuned 58-D)") # Untuned 58-D model added
     print("=" * 70)
     clf = XGBClassifier(
         n_estimators=300,
@@ -238,7 +238,7 @@ def main():
 
     tuned, best_params, best_score = tune_xgboost(X_train, y_train)
 
-    # ADDED BY PERSON B: Sigmoid probability calibration on tuned 58-D XGBoost model
+    # Sigmoid probability calibration on tuned 58-D XGBoost model
     print("\n" + "=" * 70)
     print("SIGMOID CALIBRATION (58-D MODEL)")
     print("=" * 70)
@@ -253,7 +253,7 @@ def main():
     # Evaluate calibrated model on holdout test set
     probs_test = calibrated_model.predict_proba(X_test)[:, 1]
     print("\n" + "=" * 70)
-    print("CALIBRATED 58-D MODEL ON TEST HOLDOUT") # MODIFIED BY PERSON B
+    print("CALIBRATED 58-D MODEL ON TEST HOLDOUT")
     print("=" * 70)
     print(classification_report(y_test, calibrated_model.predict(X_test), digits=4))
     print(f"Test ROC-AUC: {roc_auc_score(y_test, probs_test):.4f}")
@@ -264,7 +264,7 @@ def main():
     print(f"\nSaved {REPORTS / 'test_probs.npy'}")
     print(f"Saved {REPORTS / 'test_labels.npy'}")
 
-    # MODIFIED BY PERSON B: Persist calibrated and tuned artifacts
+    # Persist calibrated and tuned artifacts
     joblib.dump(calibrated_model, REPORTS / "xgboost_58d_calibrated.joblib")
     joblib.dump(calibrated_model, REPORTS / "xgboost_calibrated.joblib")
     joblib.dump(tuned, REPORTS / "xgboost_tuned.joblib")

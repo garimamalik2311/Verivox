@@ -1,4 +1,4 @@
-# ADDED BY PERSON B: Speaker verification embedding extractor and matcher module
+#  Speaker verification embedding extractor and matcher module
 import numpy as np
 
 def compute_speaker_similarity(ref_embedding: np.ndarray, live_embedding: np.ndarray) -> float:

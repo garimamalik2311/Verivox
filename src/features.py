@@ -3,7 +3,7 @@ import librosa
 
 from src.config import SAMPLE_RATE, WINDOW_SIZE_SAMPLES
 
-# MODIFIED BY PERSON B: Updated total feature dimension from 30-D to 58-D
+#  Updated total feature dimension to 58-D
 TOTAL_FEATURES = 58
 
 N_FFT = 1024
@@ -18,7 +18,7 @@ _MEL_BASIS = librosa.filters.mel(
     n_mels=128,
 )
 
-# ADDED BY PERSON B: WebRTC VAD check for speech/pause duration ratio calculation
+# WebRTC VAD check for speech/pause duration ratio calculation
 try:
     import webrtcvad
     _VAD_AVAILABLE = True
@@ -70,7 +70,7 @@ def extract_features(y: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
     sc = np.mean(librosa.feature.spectral_centroid(S=S, sr=sr))
     sb = np.mean(librosa.feature.spectral_bandwidth(S=S, sr=sr))
     
-    # ADDED BY PERSON B: Vocoder high-band (>6kHz) and spectral flatness modifiers
+    # Vocoder high-band (>6kHz) and spectral flatness modifiers
     spec_flatness = np.mean(librosa.feature.spectral_flatness(S=S))
     fft_freqs = librosa.fft_frequencies(sr=sr, n_fft=N_FFT)
     high_freq_mask = fft_freqs > 6000
@@ -78,9 +78,9 @@ def extract_features(y: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
     high_freq_energy = np.sum(S_power[high_freq_mask, :])
     high_freq_ratio = high_freq_energy / total_energy
 
-    ro = np.mean(librosa.feature.spectral_rolloff(S=S_power, sr=sr)) * (1.0 + spec_flatness) # MODIFIED BY PERSON B
+    ro = np.mean(librosa.feature.spectral_rolloff(S=S_power, sr=sr)) * (1.0 + spec_flatness) 
     zcr = np.mean(librosa.feature.zero_crossing_rate(y=y, hop_length=HOP_LENGTH))
-    rms = np.mean(librosa.feature.rms(S=S, frame_length=N_FFT)) * (1.0 + high_freq_ratio)  # MODIFIED BY PERSON B
+    rms = np.mean(librosa.feature.rms(S=S, frame_length=N_FFT)) * (1.0 + high_freq_ratio)  
 
     # --- 12 Chroma Features ---
     chroma = np.mean(
@@ -93,11 +93,11 @@ def extract_features(y: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
         axis=1,
     )
 
-    # --- ADDED BY PERSON B: 13 Delta & 13 Delta-Delta MFCCs ---
+    # --- 13 Delta & 13 Delta-Delta MFCCs ---
     delta_mfcc = np.mean(librosa.feature.delta(mfcc_matrix), axis=1)
     delta2_mfcc = np.mean(librosa.feature.delta(mfcc_matrix, order=2), axis=1)
 
-    # --- ADDED BY PERSON B: 2 Pitch F0 Statistics & VAD Speech Ratio ---
+    # --- 2 Pitch F0 Statistics & VAD Speech Ratio ---
     pitches, _ = librosa.piptrack(y=y, sr=sr)
     f0 = pitches[pitches > 0]
     
@@ -123,15 +123,15 @@ def extract_features(y: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
     f0_std = np.std(f0) if len(f0) > 0 else 0.0
     pitch_stats = np.array([f0_mean, f0_std], dtype=np.float32)
 
-    # MODIFIED BY PERSON B: Concatenate all into a unified 58-D Float32 vector
+    # Concatenate all into a unified 58-D Float32 vector
     vector = np.concatenate(
         [
             mfcc,                  # [0:13]   (13)
             [sc, sb, ro, zcr, rms],# [13:18]  (5)
             chroma,                # [18:30]  (12)
-            delta_mfcc,            # [30:43]  (13) - ADDED BY PERSON B
-            delta2_mfcc,           # [43:56]  (13) - ADDED BY PERSON B
-            pitch_stats            # [56:58]  (2)  - ADDED BY PERSON B
+            delta_mfcc,            # [30:43]  (13) 
+            delta2_mfcc,           # [43:56]  (13)
+            pitch_stats            # [56:58]  (2)  
         ]
     ).astype(np.float32)
 
