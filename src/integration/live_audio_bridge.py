@@ -30,7 +30,7 @@ WEBSOCKET_URL = "ws://127.0.0.1:8000/ws"
 
 STREAM_ID = "mic_001"
 
-MIC_BLOCKSIZE = 1600
+MIC_BLOCKSIZE = 320
 
 
 model = joblib.load(MODEL_PATH)
