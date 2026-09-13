@@ -8,6 +8,7 @@ import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
+from src.config import VAD_FRAME_SAMPLES
 from src.features import extract_features
 from src.risk_engine.schemas import ModelPrediction
 from src.risk_engine.stream_manager import StreamManager
@@ -41,13 +42,6 @@ model = joblib.load(MODEL_PATH)
 # ---------------------------------------------------------------------------
 # Audio configuration
 # ---------------------------------------------------------------------------
-
-AUDIO_SAMPLE_RATE = 16000
-
-# WebRTC VAD supports 10, 20, or 30 ms frames.
-# 20 ms at 16 kHz = 320 samples.
-VAD_FRAME_SAMPLES = 320
-
 
 # ---------------------------------------------------------------------------
 # Shared Risk Engine state
