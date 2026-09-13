@@ -15,7 +15,7 @@ def slice_and_extract(filepath: str):
         return []
     if len(y) < SAMPLE_RATE:
         return []
-    
+
     feats = []
     # 1s window (SAMPLE_RATE samples) with stride (WINDOW_STRIDE_SAMPLES = 8,000 samples)
     for start in range(0, len(y) - SAMPLE_RATE + 1, WINDOW_STRIDE_SAMPLES):
@@ -32,14 +32,14 @@ def run(manifest_csv: str = "data/processed/manifest.csv"):
     # 1. Carve out a ~15% holdout test set (stratified + speaker-disjoint)
     sgkf_test = StratifiedGroupKFold(n_splits=7, shuffle=True, random_state=42)
     train_val_idx, test_idx = next(sgkf_test.split(df, y=df["strat_key"], groups=df["speaker_id"]))
-    
+
     train_val_df = df.iloc[train_val_idx].reset_index(drop=True)
     test_df = df.iloc[test_idx].reset_index(drop=True)
 
     # 2. Split remainder into Train (~70%) and Val (~15%)
     sgkf_val = StratifiedGroupKFold(n_splits=6, shuffle=True, random_state=42)
     train_idx, val_idx = next(sgkf_val.split(train_val_df, y=train_val_df["strat_key"], groups=train_val_df["speaker_id"]))
-    
+
     train_df = train_val_df.iloc[train_idx].reset_index(drop=True)
     val_df = train_val_df.iloc[val_idx].reset_index(drop=True)
 
@@ -60,7 +60,7 @@ def run(manifest_csv: str = "data/processed/manifest.csv"):
             for vec in windows:
                 X.append(vec)
                 y.append(row["label"])
-        
+
         X_arr = np.array(X, dtype=np.float32)
         y_arr = np.array(y, dtype=np.int64)
         np.save(f"data/processed/X_{name}.npy", X_arr)

@@ -13,7 +13,7 @@ import queue
 import numpy as np
 import sounddevice as sd
 
-from config import SAMPLE_RATE, CHANNELS
+from src.config import SAMPLE_RATE, CHANNELS
 
 
 class MicrophoneStreamer:
@@ -22,11 +22,11 @@ class MicrophoneStreamer:
     each call to `chunks()` yields the next raw audio chunk as it arrives.
     """
 
-    def __init__(self, blocksize: int = 1600):
+    def __init__(self, blocksize: int = 320):
         """
         Args:
             blocksize: number of samples per callback invocation.
-                       1600 samples @ 16kHz = 100ms per chunk — small enough
+                       320 samples @ 16kHz = 20ms per chunk — small enough
                        for responsive downstream processing (VAD, windowing).
         """
         self.blocksize = blocksize

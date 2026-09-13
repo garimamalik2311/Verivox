@@ -12,7 +12,7 @@ import os
 import numpy as np
 import librosa
 
-from config import SAMPLE_RATE, CHANNELS, SUPPORTED_FORMATS
+from src.config import SAMPLE_RATE, CHANNELS, SUPPORTED_FORMATS
 
 
 def load_audio_file(filepath: str) -> np.ndarray:

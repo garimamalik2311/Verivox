@@ -8,7 +8,7 @@ import os
 import librosa
 import numpy as np
 
-from config import SAMPLE_RATE, SUPPORTED_FORMATS
+from src.config import SAMPLE_RATE, SUPPORTED_FORMATS
 
 
 def is_supported_format(filepath: str) -> bool:

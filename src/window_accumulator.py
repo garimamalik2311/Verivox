@@ -10,7 +10,7 @@ speech in -> clean overlapping windows out.
 
 import numpy as np
 
-from config import WINDOW_SIZE_SAMPLES, WINDOW_STRIDE_SAMPLES, SAMPLE_RATE
+from src.config import WINDOW_SIZE_SAMPLES, WINDOW_STRIDE_SAMPLES, SAMPLE_RATE
 
 
 class WindowAccumulator:

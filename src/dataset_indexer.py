@@ -40,7 +40,7 @@ def build_manifest(raw_dir: str = "data/raw", output_csv: str = "data/processed/
     df = pd.DataFrame(records)
     os.makedirs(os.path.dirname(output_csv), exist_ok=True)
     df.to_csv(output_csv, index=False)
-    
+
     print(f"Indexed {len(df)} files into {output_csv}")
     if not df.empty and "language" in df.columns:
         print("\n=== Dataset Distribution Matrix ===")

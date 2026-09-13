@@ -8,7 +8,7 @@ malformed requests). Documents what actually happens in each case.
 
 from fastapi.testclient import TestClient
 from src.api.predict import app
-import json 
+import json
 
 client = TestClient(app)
 
@@ -41,7 +41,7 @@ def test_all_nan_features():
     """All-NaN features: must be REJECTED with 400, not crash or silently pass."""
     # Python's json module supports NaN as a non-standard extension, and
     # httpx/starlette will serialize it correctly for this internal test client.
-    
+
     raw_body = json.dumps({**VALID_REQUEST, "features": [float("nan")] * 30})
     response = client.post(
         "/predict",

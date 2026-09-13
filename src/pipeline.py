@@ -7,10 +7,10 @@ what Sprint 1B / Sprint 3 will import to get windows to work with.
 
 import numpy as np
 
-from file_loader import load_audio_file
-from vad import VoiceActivityDetector
-from window_accumulator import WindowAccumulator
-from config import VAD_FRAME_SAMPLES
+from src.file_loader import load_audio_file
+from src.vad import VoiceActivityDetector
+from src.window_accumulator import WindowAccumulator
+from src.config import VAD_FRAME_SAMPLES
 
 
 def process_file(filepath: str) -> list[np.ndarray]:
