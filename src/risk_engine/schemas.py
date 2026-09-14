@@ -36,3 +36,27 @@ class RiskResult(BaseModel):
     alert_reason: str | None = None
 
     model_version: str
+
+    # --- Added by Person A (Sprint 1B: Features 1, 2, 3, 4) ---
+    # All new fields default to a safe "no signal" value so existing
+    # consumers (e.g. the /ws ModelPrediction-only path, which never
+    # sets these) keep working unchanged.
+
+    # Feature 1 — Prosody
+    prosody_pitch_variance: float | None = None
+    prosody_timing_variance: float | None = None
+    flat_prosody_flag: bool = False
+
+    # Feature 2 — Speaker Verification
+    speaker_id: str | None = None
+    speaker_similarity: float | None = None
+    speaker_match: bool | None = None
+
+    # Features 3 & 4 — Vocoder + SHAP
+    vocoder_flag: bool = False
+    diagnostic_cues: list[str] = Field(default_factory=list)
+    shap_top_features: list[int] = Field(default_factory=list)
+
+    # Sprint 1B SLA tracking
+    latency_ms: float | None = None
+    sla_breach: bool = False
