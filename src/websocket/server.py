@@ -316,12 +316,39 @@ async def audio_websocket_endpoint(websocket: WebSocket):
 
                 frame = audio[start:start + VAD_FRAME_SAMPLES]
 
-                if not vad.is_speech(frame):
-                    continue
+                # Ignore non-speech.
 
                 windows = accumulator.push(frame)
 
                 for audio_window in windows:
+
+                    # Skip completely silent windows.
+                    # Keep raw audio accumulation unchanged so model
+                    # windowing remains identical to the training pipeline.
+                    speech_detected = False
+
+                    for vad_start in range(
+                        0,
+                        len(audio_window),
+                        VAD_FRAME_SAMPLES,
+                    ):
+                        vad_frame = audio_window[
+                            vad_start:vad_start + VAD_FRAME_SAMPLES
+                        ]
+
+                        if len(vad_frame) != VAD_FRAME_SAMPLES:
+                            continue
+
+                        if vad.is_speech(vad_frame):
+                            speech_detected = True
+                            break
+
+                    if not speech_detected:
+                        print(
+                            f"[audio] stream={stream_id} "
+                            f"silent window skipped"
+                        )
+                        continue
 
                     window_id += 1
                     window_timestamp = time.time()

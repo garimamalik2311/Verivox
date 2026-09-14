@@ -40,10 +40,10 @@ def test_persistent_high_predictions_trigger_alert():
         )
     ]
 
-    # The alert should trigger when the 4th consecutive
+    # The alert should trigger when the 3rd consecutive
     # suspicious prediction arrives.
-    assert results[3].risk_level == RiskLevel.HIGH
-    assert results[3].alert_triggered is True
+    assert results[2].risk_level == RiskLevel.HIGH
+    assert results[2].alert_triggered is True
 
     # The 5th prediction remains HIGH but must not
     # generate another alert.
@@ -178,3 +178,12 @@ def test_reset():
     engine.reset()
 
     assert len(engine.buffer) == 0
+
+
+def test_single_high_prediction_does_not_trigger_high():
+    engine = RiskEngine()
+
+    result = engine.update(make_prediction(1, 0.90))
+
+    assert result.risk_level != RiskLevel.HIGH
+    assert result.alert_triggered is False
