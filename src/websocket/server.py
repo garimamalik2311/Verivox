@@ -1024,11 +1024,21 @@ async def audio_websocket_endpoint(
 
                     try:
 
-                        shap_result = (
-                            shap_engine.explain(
-                                features
+                        # Run SHAP only for suspicious windows to preserve
+                        # real-time latency. Normal windows skip SHAP.
+                        shap_result = {
+                            "vocoder_flag": False,
+                            "diagnostic_cues": [],
+                            "shap_top_features": [],
+                        }
+
+
+                        if ai_probability >= 0.50:
+                            shap_result = (
+                                shap_engine.explain(
+                                    features
+                                )
                             )
-                        )
 
                     except Exception as exc:
 
