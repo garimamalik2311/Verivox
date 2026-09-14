@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ ./src/
-COPY reports/xgboost_calibrated.joblib ./reports/xgboost_calibrated.joblib
+COPY reports/xgboost_58d_calibrated.joblib ./reports/xgboost_58d_calibrated.joblib
 
 EXPOSE 8000
 
