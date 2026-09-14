@@ -96,8 +96,8 @@ def test_multiple_streams_are_isolated():
         # Exactly one alert during the entire stream.
         assert len(alert_results) == 1
 
-        # HIGH is entered after 4 consecutive suspicious windows.
-        assert alert_results[0]["window_id"] == 4
+        # HIGH is entered after 3 consecutive suspicious windows.
+        assert alert_results[0]["window_id"] == 3
 
         assert alert_results[0]["risk_level"] == "HIGH"
 

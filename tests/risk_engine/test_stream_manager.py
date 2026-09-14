@@ -20,7 +20,7 @@ def test_streams_have_independent_state():
     manager = StreamManager()
 
     for window_id, probability in enumerate(
-        [0.82, 0.86, 0.91, 0.88],
+        [0.82, 0.86, 0.91],
         start=1,
     ):
         result = manager.update(
@@ -144,11 +144,12 @@ def test_interleaved_streams_remain_independent():
             make_prediction(stream_id, window_id, probability)
         )
 
-    # call_001 receives four persistent high predictions.
-    high_result = results[("call_001", 4)]
+    # call_001 enters HIGH and triggers the alert on the 3rd
+    # consecutive suspicious prediction.
+    high_result = results[("call_001", 3)]
 
     assert high_result.risk_level == RiskLevel.HIGH
-    assert high_result.consecutive_flags == 4
+    assert high_result.consecutive_flags == 3
     assert high_result.alert_triggered is True
 
     # call_002 remains low throughout and is unaffected by call_001.

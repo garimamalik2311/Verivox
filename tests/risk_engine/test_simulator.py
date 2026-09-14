@@ -63,8 +63,8 @@ def test_persistent_high_triggers_exactly_one_alert():
         [0.82, 0.86, 0.91, 0.88, 0.90]
     )
 
-    assert results[3].risk_level == RiskLevel.HIGH
-    assert results[3].alert_triggered is True
+    assert results[2].risk_level == RiskLevel.HIGH
+    assert results[2].alert_triggered is True
 
     assert results[4].risk_level == RiskLevel.HIGH
     assert results[4].alert_triggered is False
@@ -80,8 +80,8 @@ def test_recovery_returns_to_low():
         [0.82, 0.86, 0.91, 0.88, 0.40, 0.20, 0.15, 0.10, 0.08]
     )
 
-    assert results[3].risk_level == RiskLevel.HIGH
-    assert results[3].alert_triggered is True
+    assert results[2].risk_level == RiskLevel.HIGH
+    assert results[2].alert_triggered is True
 
     assert results[6].risk_level == RiskLevel.MEDIUM
 
@@ -104,4 +104,4 @@ def test_alert_retriggers_after_recovery():
         if result.alert_triggered
     ]
 
-    assert alert_indices == [3, 10]
+    assert alert_indices == [2, 10]

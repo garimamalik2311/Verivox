@@ -76,6 +76,7 @@ def test_stream_manager_produces_serializable_risk_result():
     manager = StreamManager()
 
     result = None
+    alert_result = None
 
     for window_id, probability in enumerate(
         [0.82, 0.86, 0.91, 0.88],
@@ -90,18 +91,21 @@ def test_stream_manager_produces_serializable_risk_result():
         )
 
         result = manager.update(prediction)
+        if window_id == 3:
+            alert_result = result
 
     assert result is not None
-    assert result.risk_level == RiskLevel.HIGH
-    assert result.alert_triggered is True
+    assert alert_result is not None
+    assert alert_result.risk_level == RiskLevel.HIGH
+    assert alert_result.alert_triggered is True
 
     json_payload = result.model_dump_json()
 
     assert '"stream_id":"call_001"' in json_payload
     assert '"window_id":4' in json_payload
     assert '"risk_level":"HIGH"' in json_payload
-    assert '"alert_triggered":true' in json_payload
-    assert '"alert_reason":"persistent_high_ai_probability"' in json_payload
+    assert '"alert_triggered":false' in json_payload
+    assert '"alert_reason":null' in json_payload
 
 
 def test_non_alert_result_has_no_alert_reason():
