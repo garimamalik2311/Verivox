@@ -15,6 +15,7 @@ import {
   Mic,
   Radio,
   Settings2,
+  ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
   UserCheck,
@@ -25,6 +26,9 @@ import {
   Play,
   Square
 } from 'lucide-react'
+
+import AdversarialRobustness from './components/AdversarialRobustness'
+import SimulationTelemetry from './components/SimulationTelemetry'
 
 const initialStreams = {
   'call_001': {
@@ -37,8 +41,8 @@ const initialStreams = {
     alert_reason: 'Consecutive high-probability synthetic signatures detected',
     speech_detected: true,
     ai_probability: 0.87,
-    model_version: 'xgb_v1',
-    feature_latency_ms: 3.8,
+    model_version: 'sprint2b-xgb-58d-calibrated',
+    feature_latency_ms: 15.2,
     lastSeen: 'Just now',
     call_duration: '00:01:12',
     timeSeries: [
@@ -86,8 +90,8 @@ const initialStreams = {
     alert_reason: null,
     speech_detected: true,
     ai_probability: 0.12,
-    model_version: 'xgb_v1',
-    feature_latency_ms: 4.1,
+    model_version: 'sprint2b-xgb-58d-calibrated',
+    feature_latency_ms: 14.8,
     lastSeen: '12 sec ago',
     call_duration: '00:00:45',
     timeSeries: [
@@ -132,8 +136,8 @@ const initialStreams = {
     alert_reason: null,
     speech_detected: false,
     ai_probability: null,
-    model_version: 'xgb_v1',
-    feature_latency_ms: 3.5,
+    model_version: 'sprint2b-xgb-58d-calibrated',
+    feature_latency_ms: 15.6,
     lastSeen: '28 sec ago',
     call_duration: '00:02:10',
     timeSeries: [
@@ -238,12 +242,13 @@ export default function App() {
                 ...existing, 
                 ...data, 
                 name: existing.name || streamId,
+                model_version: data.model_version || existing.model_version || 'sprint2b-xgb-58d-calibrated',
                 timeSeries: [...(existing.timeSeries || []), newTsEntry]
               }
             }
           })
           setStreamHistories((prev) => {
-            const currentHistory = prev[streamId] || []
+            const hist = prev[streamId] || []
             const newEntry = {
               window_id: data.window_id || windowId,
               timestamp: new Date().toLocaleTimeString(),
@@ -254,7 +259,7 @@ export default function App() {
             }
             return {
               ...prev,
-              [streamId]: [newEntry, ...currentHistory].slice(0, 10)
+              [streamId]: [newEntry, ...hist].slice(0, 10)
             }
           })
         }
@@ -332,6 +337,63 @@ export default function App() {
     }
   }, [streams])
 
+  // Handler for results returned from the live /ws/audio streaming component
+  const handleLiveAudioResult = (result) => {
+    if (!result) return
+    const sId = result.stream_id || activeStreamId
+    const newProb = result.ai_probability ?? 0.5
+    const newRolling = result.rolling_score ?? newProb
+    const risk = result.risk_level || (newRolling > 0.7 ? 'HIGH' : newRolling > 0.4 ? 'MEDIUM' : 'LOW')
+    const alertActive = result.alert_triggered ?? (risk === 'HIGH')
+
+    setStreams((prev) => {
+      const current = prev[sId] || {}
+      const updatedTimeSeries = [
+        ...(current.timeSeries || []),
+        { time: `${((current.timeSeries?.length || 0) + 1) * 5}s`, prob: Math.round(newProb * 100) }
+      ]
+      return {
+        ...prev,
+        [sId]: {
+          ...current,
+          stream_id: sId,
+          window_id: result.window_id || windowId,
+          ai_probability: newProb,
+          rolling_score: newRolling,
+          score: newRolling,
+          consecutive_flags: result.consecutive_flags ?? (risk === 'HIGH' ? (current.consecutive_flags || 0) + 1 : 0),
+          risk_level: risk,
+          status: risk === 'HIGH' ? 'High' : risk === 'MEDIUM' ? 'Medium' : 'Low',
+          alert_triggered: alertActive,
+          alert_reason: alertActive ? `Rolling threshold crossed (${newRolling.toFixed(2)} > 0.70) at Win #${result.window_id || windowId}` : null,
+          speech_detected: true,
+          model_version: result.model_version || 'sprint2b-xgb-58d-calibrated',
+          feature_latency_ms: result.feature_latency_ms || 15.2,
+          lastSeen: 'Just now',
+          timeSeries: updatedTimeSeries,
+        }
+      }
+    })
+
+    setStreamHistories((prev) => {
+      const hist = prev[sId] || []
+      const newEntry = {
+        window_id: result.window_id || windowId,
+        timestamp: new Date().toLocaleTimeString(),
+        speech_detected: true,
+        ai_probability: newProb,
+        rolling_score: newRolling,
+        risk_level: risk
+      }
+      return {
+        ...prev,
+        [sId]: [newEntry, ...hist].slice(0, 10)
+      }
+    })
+
+    setWindowId((prev) => prev + 1)
+  }
+
   function sendPrediction() {
     const payload = {
       schema_version: '1.0',
@@ -340,9 +402,9 @@ export default function App() {
       timestamp: Date.now() / 1000,
       speech_detected: speechDetected,
       ai_probability: speechDetected ? Number(probability) : null,
-      model_version: 'xgb_v1',
-      feature_latency_ms: (Math.random() * 1.5 + 3.0).toFixed(2),
-      vector_dim: 30
+      model_version: 'sprint2b-xgb-58d-calibrated',
+      feature_latency_ms: 15.2,
+      vector_dim: 58
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -379,6 +441,8 @@ export default function App() {
           speech: speechDetected,
           lastSeen: 'Just now',
           timeSeries: updatedTimeSeries,
+          model_version: 'sprint2b-xgb-58d-calibrated',
+          feature_latency_ms: 15.2,
           prosody: {
             ...current.prosody,
             rhythm_score: Number((newProb * 0.9 + 0.1).toFixed(2)),
@@ -553,7 +617,8 @@ export default function App() {
           <nav className="flex flex-wrap gap-1 rounded-xl border border-slate-800 bg-[#07090e] p-1" aria-label="Main navigation">
             {[
               { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-              { id: 'analytics', label: 'Advanced Analytics', icon: Activity },
+              { id: 'adversarial', label: 'Adversarial Robustness', icon: ShieldAlert },
+              { id: 'analytics', label: 'Deep Telemetry', icon: Activity },
               { id: 'history', label: 'History', icon: History },
               { id: 'how', label: 'How it works', icon: CircleHelp },
             ].map(({ id, label, icon: Icon }) => (
@@ -612,7 +677,7 @@ export default function App() {
                         {isMicIngesting ? 'Capturing Mic Audio' : 'Idle / Standby'}
                       </span>
                     </h2>
-                    <p className="text-xs text-slate-400 font-mono">16kHz Mono PCM &bull; WebRTC VAD Active &bull; 30-Dim Feature Extractor</p>
+                    <p className="text-xs text-slate-400 font-mono">16kHz Mono PCM &bull; WebRTC VAD Active &bull; 58-Dim Feature Extractor</p>
                   </div>
                 </div>
                 <button
@@ -636,7 +701,6 @@ export default function App() {
                   </div>
                   <div className="flex items-center gap-1 h-12 bg-black/40 px-3 py-2 rounded-lg border border-slate-800/80 overflow-hidden">
                     {Array.from({ length: 32 }).map((_, i) => {
-                      // Height calculation driven by micLevel or standby breathing wave
                       const heightFactor = isMicIngesting 
                         ? Math.max(10, Math.sin((i + Date.now() / 150) * 0.5) * micLevel + Math.random() * micLevel)
                         : Math.sin(i * 0.4) * 15 + 20
@@ -660,7 +724,7 @@ export default function App() {
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px]">LATENCY</span>
-                    <span className="text-cyan-300 font-bold">{isMicIngesting ? '3.2 ms' : '--'}</span>
+                    <span className="text-cyan-300 font-bold">{isMicIngesting ? '15.2 ms' : '--'}</span>
                   </div>
                   <div>
                     <span className="text-slate-500 block text-[10px]">VAD STATUS</span>
@@ -800,63 +864,29 @@ export default function App() {
                   </div>
 
                   <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-5">
-                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
-                      <Waves size={16} className="text-cyan-400" /> Feature Latency
+                    <div className="flex items-center justify-between text-xs font-semibold text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <Waves size={16} className="text-cyan-400" /> Feature Latency
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950/60 text-amber-300 border border-amber-500/30">
+                        SLA Alert &gt; 10ms
+                      </span>
                     </div>
-                    <p className="mt-3 text-xl font-bold font-mono text-white">{selected.feature_latency_ms || '3.8'} ms</p>
+                    <p className="mt-3 text-xl font-bold font-mono text-white">{selected.feature_latency_ms || '15.2'} ms</p>
                     <p className="mt-2 text-xs leading-5 text-slate-400">
-                      30-Dimensional Feature Vector (13 MFCC + 5 Spectral + 12 Chroma).
+                      58-Dimensional Feature Vector (13 MFCC + 13 &Delta; + 13 &Delta;&Delta; + 7 Spectral Contrast + 12 Chroma + 3 Pitch Stats).
                     </p>
-                    <div className="mt-5 flex items-center gap-2 text-xs font-medium text-emerald-400">
-                      <CheckCircle2 size={15} /> Model: {selected.model_version || 'xgb_v1'}
+                    <div className="mt-5 flex items-center gap-2 text-xs font-medium text-emerald-400 font-mono">
+                      <CheckCircle2 size={15} /> Model: {selected.model_version || 'sprint2b-xgb-58d-calibrated'}
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-bold text-white">Simulation Telemetry Injection</h3>
-                      <p className="mt-0.5 text-xs text-slate-400">Transmit a 1-second audio window to your FastAPI WebSocket server.</p>
-                    </div>
-                    <SlidersHorizontal size={18} className="text-slate-500" />
-                  </div>
-                  <div className="mt-5 space-y-5">
-                    <label className="flex items-center justify-between gap-4 text-xs font-medium text-slate-300">
-                      <span>VAD Speech Activity</span>
-                      <input
-                        type="checkbox"
-                        checked={speechDetected}
-                        onChange={(event) => setSpeechDetected(event.target.checked)}
-                        className="size-4 accent-cyan-400 rounded cursor-pointer"
-                      />
-                    </label>
-                    <label className="block text-xs font-medium text-slate-300">
-                      <div className="mb-2 flex justify-between">
-                        <span>XGBoost Window Probability</span>
-                        <span className="font-mono text-cyan-300 font-bold">
-                          {speechDetected ? Number(probability).toFixed(2) : 'NULL (Silence)'}
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={probability}
-                        onChange={(event) => setProbability(event.target.value)}
-                        disabled={!speechDetected}
-                        className="w-full accent-cyan-400 disabled:opacity-30 cursor-pointer bg-slate-800 rounded-lg h-2"
-                      />
-                    </label>
-                    <button
-                      onClick={sendPrediction}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-950 transition hover:opacity-90 shadow-lg shadow-cyan-400/20 active:scale-[0.99]"
-                    >
-                      <span>Transmit Window</span> <span className="font-mono text-[10px] bg-black/20 px-2 py-0.5 rounded"># {windowId}</span> <ArrowRight size={16} />
-                    </button>
-                  </div>
-                </div>
+                {/* Primary Simulation Telemetry Injection Panel */}
+                <SimulationTelemetry
+                  activeStreamId={activeStreamId}
+                  onResultReceived={handleLiveAudioResult}
+                />
 
                 {showInspector && (
                   <div className="bg-black p-4 rounded-xl border border-cyan-500/40 font-mono text-xs text-cyan-300 overflow-x-auto shadow-2xl">
@@ -869,6 +899,20 @@ export default function App() {
                 )}
               </div>
             </section>
+          </div>
+        )}
+
+        {/* ADVERSARIAL ROBUSTNESS BENCHMARK VIEW */}
+        {activePage === 'adversarial' && (
+          <div className="space-y-8 max-w-6xl mx-auto">
+            <AdversarialRobustness />
+
+            <div className="max-w-5xl mx-auto pt-2">
+              <SimulationTelemetry
+                activeStreamId={activeStreamId}
+                onResultReceived={handleLiveAudioResult}
+              />
+            </div>
           </div>
         )}
 
@@ -1079,8 +1123,8 @@ export default function App() {
             <div className="grid gap-4 md:grid-cols-3">
               {[
                 { icon: Mic, title: '1. Ingestion & VAD', text: '16kHz Mono audio split into 1-second rolling windows with WebRTC VAD filtering.' },
-                { icon: Activity, title: '2. 30-Dim Vector', text: 'Extracts 13 MFCCs, 5 spectral descriptors, and 12 chroma features.' },
-                { icon: ShieldCheck, title: '3. XGBoost & Risk', text: 'Evaluates probability via model xgb_v1 and aggregates rolling risk scores.' },
+                { icon: Activity, title: '2. 58-Dim Vector', text: 'Extracts 13 MFCCs, 13 delta, 13 delta-delta, 7 spectral contrast, 12 chroma, and 3 pitch statistics.' },
+                { icon: ShieldCheck, title: '3. XGBoost & Risk', text: 'Evaluates probability via model sprint2b-xgb-58d-calibrated and aggregates rolling risk scores.' },
               ].map(({ icon: Icon, title, text }) => (
                 <div key={title} className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-6 shadow-xl">
                   <div className="mb-6 flex size-10 items-center justify-center rounded-xl bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
