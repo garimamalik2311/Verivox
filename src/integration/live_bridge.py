@@ -22,6 +22,7 @@ from src.risk_engine.schemas import ModelPrediction
 
 MODEL_PATH = "reports/xgboost_58d_calibrated.joblib"
 MODEL_VERSION = "sprint2b-xgb-58d-calibrated"
+EXPECTED_FEATURES = 58
 
 WEBSOCKET_URL = "ws://127.0.0.1:8000/ws"
 
@@ -56,10 +57,13 @@ async def run_file_bridge(filepath: str) -> None:
             start_time = time.perf_counter()
 
             features = extract_features(audio_window)
+            
+            # Ensure flattening and exact dimensionality checks match server expectations (58-D)
+            features = features.reshape(-1)
 
-            if features.shape != (58,):
+            if features.shape != (EXPECTED_FEATURES,):
                 raise ValueError(
-                    f"Expected 58-D feature vector, got {features.shape}"
+                    f"Expected {EXPECTED_FEATURES}-D feature vector, got {features.shape}"
                 )
 
             ai_probability = float(

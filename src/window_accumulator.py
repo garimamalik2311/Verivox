@@ -60,7 +60,7 @@ class WindowAccumulator:
 
         Args:
             audio_chunk: 1D float32 array of new VAD-filtered speech samples
-            origin_samples_chunk: 1D int64 array, same length as audio_chunk,
+                origin_samples_chunk: 1D int64 array, same length as audio_chunk,
                 giving each sample's absolute original sample index
 
         Returns:
@@ -92,8 +92,6 @@ class WindowAccumulator:
 
 if __name__ == "__main__":
     # Manual test: push 2.5 seconds of audio in small chunks, verify overlap math
-    from config import SAMPLE_RATE
-
     acc = WindowAccumulator()
     total_samples = int(SAMPLE_RATE * 2.5)
     fake_speech = np.random.randn(total_samples).astype(np.float32) * 0.1
@@ -107,4 +105,3 @@ if __name__ == "__main__":
 
     print(f"Pushed {total_samples} samples ({total_samples/SAMPLE_RATE:.1f}s)")
     print(f"Emitted {len(all_windows)} windows of {acc.window_size} samples each")
-    # Expected: with 2.5s audio, 1s windows, 0.5s stride -> ~4 windows
