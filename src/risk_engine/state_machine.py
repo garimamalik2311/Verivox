@@ -20,18 +20,23 @@ class RiskStateMachine:
         self,
         rolling_score: float,
         allow_high: bool = True,
+        confirmed_ai: bool = False,
     ) -> RiskLevel:
         if not 0.0 <= rolling_score <= 1.0:
             raise ValueError("rolling_score must be between 0 and 1")
 
         if self._state == RiskLevel.LOW:
-            if allow_high and rolling_score >= HIGH_ENTER_THRESHOLD:
+            if confirmed_ai:
+                self._state = RiskLevel.HIGH
+            elif allow_high and rolling_score >= HIGH_ENTER_THRESHOLD:
                 self._state = RiskLevel.HIGH
             elif rolling_score >= MEDIUM_THRESHOLD:
                 self._state = RiskLevel.MEDIUM
 
         elif self._state == RiskLevel.MEDIUM:
-            if allow_high and rolling_score >= HIGH_ENTER_THRESHOLD:
+            if confirmed_ai:
+                self._state = RiskLevel.HIGH
+            elif allow_high and rolling_score >= HIGH_ENTER_THRESHOLD:
                 self._state = RiskLevel.HIGH
             elif rolling_score < MEDIUM_THRESHOLD:
                 self._state = RiskLevel.LOW
