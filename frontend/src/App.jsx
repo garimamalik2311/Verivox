@@ -167,6 +167,9 @@ export default function App() {
   const [micStatus, setMicStatus] =
     useState('Disconnected')
 
+  const [securityTerminated, setSecurityTerminated] =
+    useState(false)
+
   const [micLevel, setMicLevel] =
     useState(0)
 
@@ -186,6 +189,8 @@ export default function App() {
   const processorRef = useRef(null)
   const sourceRef = useRef(null)
   const fileIntervalRef = useRef(null)
+  const fileStreamActiveRef = useRef(false)
+  const securityTerminatedRef = useRef(false)
 
   const selected =
     streams[activeStreamId] ||
@@ -205,7 +210,7 @@ export default function App() {
 
     const wsUrl =
       import.meta.env.VITE_RISK_WS_URL ||
-      `ws://localhost:8000/ws/audio?stream_id=${streamId}`
+      `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
 
     console.log('Connecting Risk WebSocket:', wsUrl)
 
@@ -224,7 +229,12 @@ export default function App() {
       console.log('Risk WebSocket closed')
 
       setIsConnected(false)
-      setMicStatus('Disconnected')
+
+      setMicStatus(
+        securityTerminatedRef.current
+          ? 'STREAM TERMINATED — SECURITY ALERT'
+          : 'Disconnected'
+      )
     }
 
     ws.onerror = (error) => {
@@ -239,6 +249,38 @@ export default function App() {
         const data = JSON.parse(event.data)
 
         console.log('RiskResult:', data)
+
+        /*
+         * STOP FILE STREAM WHEN BACKEND TRIGGERS ALERT
+         */
+        if (data.alert_triggered === true) {
+          console.warn(
+            'HIGH-RISK ALERT: HARD STOPPING FILE STREAM'
+          )
+
+          securityTerminatedRef.current = true
+          setSecurityTerminated(true)
+
+          /*
+           * Kill-switch MUST happen before
+           * clearing the interval.
+           */
+          fileStreamActiveRef.current = false
+
+          if (fileIntervalRef.current) {
+            clearInterval(
+              fileIntervalRef.current
+            )
+
+            fileIntervalRef.current = null
+          }
+
+          setMicLevel(0)
+
+          setMicStatus(
+            'ALERT: Synthetic Voice Clone Detected'
+          )
+        }
 
         /*
          * Backend stream ID is authoritative.
@@ -291,9 +333,35 @@ export default function App() {
               ...existing,
 
               /*
-               * Backend data overwrites frontend state.
+               * Backend data updates the stream state.
+               *
+               * ALERT IS LATCHED:
+               * Once the backend triggers an alert, later
+               * telemetry packets with alert_triggered=false
+               * must not immediately hide the UI alert.
+               *
+               * acknowledgeAlert() explicitly clears it.
                */
               ...data,
+
+              alert_triggered:
+                data.alert_triggered === true ||
+                existing.alert_triggered === true,
+
+              alert_reason:
+                data.alert_reason ||
+                existing.alert_reason ||
+                null,
+
+              /*
+               * Preserve the consecutive-flag count that caused
+               * the alert. The live consecutive_flags value may
+               * return to 0 after the HIGH state is entered.
+               */
+              alert_consecutive_flags:
+                data.alert_triggered === true
+                  ? (data.consecutive_flags ?? 0)
+                  : (existing.alert_consecutive_flags ?? null),
 
               timeSeries:
                 newTsEntry
@@ -367,8 +435,33 @@ export default function App() {
     }
 
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
+      /*
+       * Always close this WebSocket during cleanup.
+       *
+       * IMPORTANT:
+       * readyState may still be CONNECTING. Checking only
+       * OPEN allows an abandoned socket to finish connecting,
+       * creating duplicate backend connections in React/Vite
+       * development mode.
+       */
+      if (
+        ws.readyState === WebSocket.CONNECTING ||
+        ws.readyState === WebSocket.OPEN
+      ) {
+        console.log(
+          'Cleaning up Risk WebSocket:',
+          wsUrl
+        )
+
         ws.close()
+      }
+
+      /*
+       * Only clear wsRef if it still points to THIS socket.
+       * Never accidentally clear a newer connection.
+       */
+      if (wsRef.current === ws) {
+        wsRef.current = null
       }
 
       stopMicrophoneStream()
@@ -814,12 +907,30 @@ export default function App() {
           `Streaming File: ${file.name}`
         )
 
+        fileStreamActiveRef.current = true
+
         fileIntervalRef.current =
           setInterval(() => {
+
+            /*
+             * HARD STOP KILL-SWITCH
+             * Never send another chunk after alert/acknowledge.
+             */
+            if (!fileStreamActiveRef.current) {
+              clearInterval(
+                fileIntervalRef.current
+              )
+
+              fileIntervalRef.current = null
+              return
+            }
+
             if (
               offset >=
               pcm16.length
             ) {
+              fileStreamActiveRef.current = false
+
               clearInterval(
                 fileIntervalRef.current
               )
@@ -843,6 +954,13 @@ export default function App() {
                 offset,
                 offset + chunkSize
               )
+
+            console.log(
+              'FILE CHUNK SENT:',
+              offset,
+              '/',
+              pcm16.length
+            )
 
             ws.send(
               chunk.buffer
@@ -1243,9 +1361,22 @@ export default function App() {
                     '--'}
                 </span>{' '}
 
-                consecutive flags
+                current consecutive flags
 
               </p>
+
+              {selected.alert_triggered &&
+                selected.alert_consecutive_flags != null && (
+                  <p className="mt-2 text-xs text-rose-300 font-mono">
+
+                    <span className="font-bold text-rose-400">
+                      {selected.alert_consecutive_flags}
+                    </span>{' '}
+
+                    consecutive flags at alert
+
+                  </p>
+                )}
 
             </div>
 
@@ -1432,6 +1563,33 @@ export default function App() {
 
   const acknowledgeAlert =
     () => {
+      /*
+       * Safety backstop:
+       * acknowledging an alert must NEVER resume
+       * or allow an active file stream to continue.
+       */
+      if (fileIntervalRef.current) {
+        console.warn(
+          'ACKNOWLEDGE ALERT: stopping active file stream'
+        )
+
+        clearInterval(
+          fileIntervalRef.current
+        )
+
+        fileIntervalRef.current = null
+
+        setMicLevel(0)
+
+        setMicStatus(
+          'Stream frozen after alert'
+        )
+      }
+
+      /*
+       * Acknowledge only dismisses the UI alert.
+       * Backend risk state is NOT modified.
+       */
       setStreams((prev) => ({
         ...prev,
 
@@ -1875,8 +2033,10 @@ export default function App() {
                     </h2>
 
                     <p className="mt-1 text-xs leading-5 text-rose-300/80 font-mono">
-                      {selected.alert_reason ||
-                        'Backend Risk Engine has triggered an alert for this stream.'}
+                      {selected.alert_reason === 'persistent_high_ai_probability'
+                        ? `High synthetic-voice probability detected across ${selected.alert_consecutive_flags || selected.consecutive_flags || 3} consecutive audio windows.`
+                        : selected.alert_reason ||
+                          'Backend Risk Engine has triggered an alert for this stream.'}
                     </p>
 
                   </div>
