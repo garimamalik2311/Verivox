@@ -141,6 +141,54 @@ function formatScore(value, digits = 3) {
 
 
 /* =========================================================
+   ANALYTICS DATA NORMALIZATION
+   Backend RiskResult uses flat fields. Analytics consumes
+   this normalized shape so the UI stays independent of
+   backend field naming.
+   ========================================================= */
+
+function getAnalyticsData(selected = {}) {
+  return {
+    prosody: {
+      pitch_variance:
+        selected.prosody_pitch_variance ?? null,
+      timing_variance:
+        selected.prosody_timing_variance ?? null,
+    },
+
+    speaker_verification: {
+      match_score:
+        selected.speaker_similarity ?? null,
+      match:
+        selected.speaker_match ?? null,
+    },
+
+    vocoder_fingerprint: {
+      flagged:
+        selected.vocoder_flag ?? false,
+      diagnostic_cues:
+        Array.isArray(selected.diagnostic_cues)
+          ? selected.diagnostic_cues
+          : [],
+    },
+
+    feature_latency_ms:
+      selected.latency_ms ?? null,
+
+    shap_features:
+      Array.isArray(selected.shap_features)
+        ? selected.shap_features
+        : [],
+
+    shap_top_features:
+      Array.isArray(selected.shap_top_features)
+        ? selected.shap_top_features
+        : [],
+  }
+}
+
+
+/* =========================================================
    MAIN APP
    ========================================================= */
 
@@ -159,6 +207,9 @@ export default function App() {
     useState('call_001')
 
   const [isConnected, setIsConnected] =
+    useState(false)
+
+  const [isBackendOnline, setIsBackendOnline] =
     useState(false)
 
   const [inputMode, setInputMode] =
@@ -197,6 +248,9 @@ export default function App() {
     streams.call_001 ||
     {}
 
+  const analytics =
+    getAnalyticsData(selected)
+
   const currentHistory =
     streamHistories[activeStreamId] || []
 
@@ -222,6 +276,7 @@ export default function App() {
       console.log('Risk WebSocket connected')
 
       setIsConnected(true)
+      setIsBackendOnline(true)
       setMicStatus('Connected / Ready')
     }
 
@@ -229,6 +284,9 @@ export default function App() {
       console.log('Risk WebSocket closed')
 
       setIsConnected(false)
+      setIsBackendOnline(
+        securityTerminatedRef.current
+      )
 
       setMicStatus(
         securityTerminatedRef.current
@@ -241,7 +299,14 @@ export default function App() {
       console.error('Risk WebSocket error:', error)
 
       setIsConnected(false)
-      setMicStatus('Backend Connection Error')
+      setIsBackendOnline(
+        securityTerminatedRef.current
+      )
+      setMicStatus(
+        securityTerminatedRef.current
+          ? 'STREAM TERMINATED — SECURITY ALERT'
+          : 'Backend Connection Error'
+      )
     }
 
     ws.onmessage = (event) => {
@@ -1722,16 +1787,22 @@ export default function App() {
 
               <span
                 className={`size-2.5 rounded-full ${
-                  isConnected
+                  selected.security_terminated || securityTerminated
+                    ? 'bg-amber-400'
+                    : isBackendOnline
                     ? 'bg-emerald-400 animate-pulse'
                     : 'bg-rose-500'
                 }`}
               />
 
               <span className="font-mono">
-                {isConnected
-                  ? 'WS Connected'
-                  : 'Backend Offline'}
+                {securityTerminated
+                  ? 'BACKEND ONLINE · STREAM TERMINATED'
+                  : isBackendOnline
+                  ? isConnected
+                    ? 'BACKEND ONLINE · STREAM ACTIVE'
+                    : 'BACKEND ONLINE'
+                  : 'BACKEND OFFLINE'}
               </span>
 
             </div>
@@ -2565,7 +2636,7 @@ export default function App() {
 
                   <StatusPill
                     status={
-                      selected.prosody
+                      analytics.prosody
                         ?.status
                     }
                   />
@@ -2582,7 +2653,7 @@ export default function App() {
                     </p>
 
                     <p className="text-lg font-bold font-mono text-white mt-1">
-                      {selected.prosody
+                      {analytics.prosody
                         ?.rhythm_score ??
                         '--'}
                     </p>
@@ -2597,7 +2668,7 @@ export default function App() {
                     </p>
 
                     <p className="text-sm font-bold text-white mt-1">
-                      {selected.prosody
+                      {analytics.prosody
                         ?.pitch_variance ??
                         '--'}
                     </p>
@@ -2614,7 +2685,7 @@ export default function App() {
                   </p>
 
                   <p className="text-sm font-semibold text-slate-200 mt-1">
-                    {selected.prosody
+                    {analytics.prosody
                       ?.pause_regularity ??
                       '--'}
                   </p>
@@ -2808,96 +2879,275 @@ export default function App() {
 
               {/* EXPLAINABILITY */}
 
-              <div className="rounded-2xl border border-slate-800 bg-[#0c1017]/90 p-6 shadow-xl space-y-4">
+              <div className="md:col-span-2 rounded-2xl border border-emerald-500/30 bg-[#0c1017]/95 p-6 shadow-xl space-y-6">
 
-                <div className="flex items-center justify-between">
+                {(() => {
+                  const topFeatureOrder = Array.isArray(selected.shap_top_features)
+                    ? selected.shap_top_features.map(Number)
+                    : []
 
-                  <div className="flex items-center gap-3">
+                  const shapFeatures = (Array.isArray(analytics.shap_features)
+                    ? analytics.shap_features
+                    : [])
+                    .map((feature, index) => {
+                      const value = Number(feature?.value)
+                      const absValue = Number(feature?.abs_value)
 
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
-                      <GitBranch size={20} />
-                    </div>
+                      return {
+                        ...feature,
+                        name:
+                          feature?.name ||
+                          `Feature ${feature?.index ?? index}`,
+                        value,
+                        absValue: Number.isFinite(absValue)
+                          ? Math.abs(absValue)
+                          : Math.abs(value),
+                        direction:
+                          feature?.direction ||
+                          (value >= 0 ? 'positive' : 'negative')
+                      }
+                    })
+                    .filter(
+                      (feature) =>
+                        Number.isFinite(feature.value) &&
+                        Number.isFinite(feature.absValue)
+                    )
+                    .sort((left, right) => {
+                      const leftRank = topFeatureOrder.indexOf(Number(left.index))
+                      const rightRank = topFeatureOrder.indexOf(Number(right.index))
 
-                    <div>
+                      if (leftRank !== -1 || rightRank !== -1) {
+                        return (
+                          (leftRank === -1 ? Number.MAX_SAFE_INTEGER : leftRank) -
+                          (rightRank === -1 ? Number.MAX_SAFE_INTEGER : rightRank)
+                        )
+                      }
 
-                      <h2 className="text-base font-bold text-white">
-                        4. Explainability & Audit Trail
-                      </h2>
+                      return right.absValue - left.absValue
+                    })
+                    .slice(0, 5)
 
-                      <p className="text-xs text-slate-400">
-                        Human-readable model reasoning
-                      </p>
+                  const maxContribution = Math.max(
+                    ...shapFeatures.map((feature) => feature.absValue),
+                    1
+                  )
 
-                    </div>
+                  const cues = Array.isArray(selected.diagnostic_cues)
+                    ? selected.diagnostic_cues
+                    : []
 
-                  </div>
+                  const cueLabels = {
+                    spectral_artifact: 'Spectral anomaly signal detected',
+                    flat_prosody_timing: 'MFCC dynamics signal detected'
+                  }
 
+                  const hasActionableEvidence =
+                    selected.risk_level === 'HIGH' ||
+                    Number(selected.ai_probability) >= 0.7 ||
+                    Number(selected.consecutive_flags) >= 3 ||
+                    selected.vocoder_flag === true
 
-                  <span className="font-mono text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
-                    Backend
-                  </span>
+                  return (
+                    <>
+                      <div className="flex flex-col gap-4 border-b border-slate-800 pb-5 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-300 border border-emerald-400/20">
+                            <GitBranch size={21} />
+                          </div>
 
-                </div>
-
-
-                <div className="bg-[#121824]/80 p-4 rounded-xl border border-slate-800 space-y-3">
-
-                  <p className="text-xs font-semibold text-white">
-                    Primary Driver
-                  </p>
-
-                  <p className="text-xs font-mono text-cyan-300 bg-cyan-950/30 p-2 rounded border border-cyan-500/20">
-
-                    {selected
-                      .explainability
-                      ?.primary_driver ??
-                      '--'}
-
-                  </p>
-
-
-                  <div className="space-y-1.5">
-
-                    {(
-                      selected
-                        .explainability
-                        ?.factors || []
-                    ).map(
-                      (
-                        factor,
-                        index
-                      ) => (
-                        <div
-                          key={index}
-                          className="flex items-start gap-2 text-[11px] text-slate-300"
-                        >
-
-                          <CheckCircle2
-                            size={13}
-                            className="text-emerald-400 shrink-0 mt-0.5"
-                          />
-
-                          <span>
-                            {factor}
-                          </span>
-
+                          <div>
+                            <h2 className="text-base font-bold text-white">
+                              4. Explainability & Audit Trail
+                            </h2>
+                            <p className="mt-1 text-xs text-slate-400">
+                              Why the model produced this window assessment
+                            </p>
+                          </div>
                         </div>
-                      )
-                    )}
 
-                    {!selected
-                      .explainability
-                      ?.factors
-                      ?.length && (
-                      <p className="text-[11px] text-slate-500 font-mono">
-                        Backend explainability data not received yet.
-                      </p>
-                    )}
+                        <span className="w-fit rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2.5 py-1 font-mono text-xs text-emerald-400">
+                          BACKEND EVIDENCE
+                        </span>
+                      </div>
 
-                  </div>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-4">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                            AI Probability
+                          </p>
+                          <p className="mt-2 text-4xl font-black font-mono text-white">
+                            {formatProbability(selected.ai_probability, 1)}
+                          </p>
+                        </div>
 
-                </div>
+                        <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-4">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                            Backend Risk
+                          </p>
+                          <div className="mt-2">
+                            <StatusPill status={selected.risk_level} />
+                          </div>
+                        </div>
+                      </div>
 
+                      <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-5">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <p className="text-xs font-bold text-white">
+                              Model Evidence · SHAP Contributions
+                            </p>
+                            <p className="mt-1 text-[11px] text-slate-500 font-mono">
+                              Negative values move away from synthetic speech; positive values move toward it.
+                            </p>
+                          </div>
+                          <div className="flex justify-between gap-8 text-[10px] font-mono uppercase tracking-wider">
+                            <span className="text-cyan-300">Decreases synthetic</span>
+                            <span className="text-rose-300">Increases synthetic</span>
+                          </div>
+                        </div>
+
+                        {shapFeatures.length === 0 ? (
+                          <p className="mt-5 text-xs text-slate-500 font-mono">
+                            SHAP explanation not available for this window.
+                          </p>
+                        ) : (
+                          <div className="mt-5 space-y-3">
+                            {shapFeatures.map((feature) => {
+                              const width = `${Math.max(
+                                Math.round((feature.absValue / maxContribution) * 100),
+                                4
+                              )}%`
+                              const isPositive = feature.value >= 0
+
+                              return (
+                                <div
+                                  key={`${feature.index ?? feature.name}-${feature.value}`}
+                                  className="grid grid-cols-[minmax(92px,0.8fr)_minmax(0,1.8fr)_auto] items-center gap-3 text-[11px]"
+                                >
+                                  <span className="truncate text-slate-200" title={feature.name}>
+                                    {feature.name}
+                                  </span>
+
+                                  <div className="grid grid-cols-2 items-center gap-1">
+                                    <div className="flex h-5 justify-end border-r border-slate-600 pr-1">
+                                      {!isPositive && (
+                                        <div
+                                          className="h-full rounded-l bg-cyan-400/80"
+                                          style={{ width }}
+                                        />
+                                      )}
+                                    </div>
+                                    <div className="flex h-5 justify-start pl-1">
+                                      {isPositive && (
+                                        <div
+                                          className="h-full rounded-r bg-rose-400/85"
+                                          style={{ width }}
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <span
+                                    className={`w-14 text-right font-mono font-bold ${
+                                      isPositive ? 'text-rose-300' : 'text-cyan-300'
+                                    }`}
+                                  >
+                                    {feature.value > 0 ? '+' : ''}
+                                    {formatScore(feature.value, 2)}
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-4">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                            Signals Detected
+                          </p>
+                          <div className="mt-3 space-y-2">
+                            {cues.map((cue, index) => (
+                              <div
+                                key={`${cue}-${index}`}
+                                className="flex items-start gap-2 text-xs text-slate-300"
+                              >
+                                <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-400" />
+                                <span>
+                                  {cueLabels[cue] ||
+                                    String(cue)
+                                      .replaceAll('_', ' ')
+                                      .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                                </span>
+                              </div>
+                            ))}
+
+                            {selected.vocoder_flag === true && (
+                              <div className="flex items-start gap-2 text-xs text-slate-300">
+                                <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-400" />
+                                <span>Acoustic generation signal flagged</span>
+                              </div>
+                            )}
+
+                            {!cues.length && selected.vocoder_flag !== true && (
+                              <p className="text-xs text-slate-500 font-mono">
+                                No diagnostic signals reported for this window.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-800 bg-[#121824]/80 p-4">
+                          <p className="text-[10px] uppercase tracking-wider text-slate-500 font-mono">
+                            What This Means
+                          </p>
+                          <p className="mt-3 text-xs leading-5 text-slate-300">
+                            The displayed features are the highest-impact contributors for this analysis window. Positive SHAP values push the model toward synthetic speech, while negative values push it away. Individual features do not independently prove that a voice is synthetic.
+                          </p>
+                        </div>
+                      </div>
+
+                      {hasActionableEvidence && (
+                        <div className="rounded-xl border border-amber-400/30 bg-amber-950/20 p-4">
+                          <p className="text-[10px] uppercase tracking-wider text-amber-300 font-mono">
+                            Recommended Security Action
+                          </p>
+                          <p className="mt-2 text-xs leading-5 text-amber-100/90">
+                            Verify caller identity before authorizing payment, credential reset, or other sensitive actions.
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid gap-3 rounded-xl border border-slate-800 bg-[#090d16] p-4 sm:grid-cols-3 lg:grid-cols-6">
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-mono">WINDOW</p>
+                          <p className="mt-1 text-xs font-bold text-white font-mono">{selected.window_id ?? '--'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-mono">MODEL</p>
+                          <p className="mt-1 truncate text-xs font-bold text-cyan-300 font-mono" title={selected.model_version || ''}>{selected.model_version || '--'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-mono">PROBABILITY</p>
+                          <p className="mt-1 text-xs font-bold text-white font-mono">{formatProbability(selected.ai_probability, 1)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-mono">RISK</p>
+                          <p className="mt-1 text-xs font-bold text-white font-mono">{selected.risk_level || '--'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-mono">CONFIRMATIONS</p>
+                          <p className="mt-1 text-xs font-bold text-white font-mono">{selected.consecutive_flags ?? '--'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-500 font-mono">LATENCY</p>
+                          <p className="mt-1 text-xs font-bold text-white font-mono">{analytics.feature_latency_ms != null ? `${analytics.feature_latency_ms} ms` : '--'}</p>
+                        </div>
+                      </div>
+                    </>
+                  )
+                })()}
               </div>
 
             </div>
@@ -2939,9 +3189,9 @@ export default function App() {
                   </p>
 
                   <p className="mt-1 text-xs font-bold text-white font-mono">
-                    {selected.feature_latency_ms !==
+                    {analytics.feature_latency_ms !==
                       undefined
-                      ? `${selected.feature_latency_ms} ms`
+                      ? `${analytics.feature_latency_ms} ms`
                       : '--'}
                   </p>
                 </div>

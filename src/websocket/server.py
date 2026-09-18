@@ -1035,6 +1035,7 @@ async def audio_websocket_endpoint(
                             "vocoder_flag": False,
                             "diagnostic_cues": [],
                             "shap_top_features": [],
+                            "shap_features": [],
                         }
 
 
@@ -1058,6 +1059,7 @@ async def audio_websocket_endpoint(
                             "vocoder_flag": False,
                             "diagnostic_cues": [],
                             "shap_top_features": [],
+                            "shap_features": [],
                         }
 
                     # --------------------------------------------------------
@@ -1133,6 +1135,12 @@ async def audio_websocket_endpoint(
                             "shap_top_features": (
                                 shap_result.get(
                                     "shap_top_features",
+                                    [],
+                                )
+                            ),
+                            "shap_features": (
+                                shap_result.get(
+                                    "shap_features",
                                     [],
                                 )
                             ),

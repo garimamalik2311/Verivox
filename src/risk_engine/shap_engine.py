@@ -735,7 +735,7 @@ class ShapEngine:
             )
 
         # -------------------------------------------------------------------
-        # Top 5 features
+        # Top 5 SHAP features
         # -------------------------------------------------------------------
 
         top_features = list(
@@ -743,6 +743,64 @@ class ShapEngine:
                 -np.abs(shap_values)
             )[:5]
         )
+
+        # Feature names follow the 58-D extractor contract in features.py.
+        def feature_name(index: int) -> str:
+
+            if 0 <= index <= 12:
+                return f"MFCC {index + 1}"
+
+            if index == 13:
+                return "Spectral Centroid"
+
+            if index == 14:
+                return "Spectral Bandwidth"
+
+            if index == 15:
+                return "Spectral Rolloff"
+
+            if index == 16:
+                return "Zero-Crossing Rate"
+
+            if index == 17:
+                return "RMS Energy"
+
+            if 18 <= index <= 29:
+                return f"Chroma {index - 17}"
+
+            if 30 <= index <= 42:
+                return f"MFCC Delta {index - 29}"
+
+            if 43 <= index <= 55:
+                return f"MFCC Delta-Delta {index - 42}"
+
+            if index == 56:
+                return "F0 Mean"
+
+            if index == 57:
+                return "F0 Std Dev"
+
+            return f"Feature {index}"
+
+        shap_features = []
+
+        for index in top_features:
+
+            value = float(shap_values[index])
+
+            shap_features.append({
+                "index": int(index),
+                "name": feature_name(int(index)),
+                "value": value,
+                "abs_value": abs(value),
+                "direction": (
+                    "increases_synthetic_probability"
+                    if value > 0
+                    else "decreases_synthetic_probability"
+                    if value < 0
+                    else "neutral"
+                ),
+            })
 
         return {
             "vocoder_flag": (
@@ -754,5 +812,6 @@ class ShapEngine:
                 int(i)
                 for i in top_features
             ],
+            "shap_features": shap_features,
         }
 
