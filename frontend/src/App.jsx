@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 
 import AdversarialRobustness from './components/AdversarialRobustness'
-import SimulationTelemetry from './components/SimulationTelemetry'
+
 
 
 /* =========================================================
@@ -2473,16 +2473,7 @@ export default function App() {
                 </div>
 
 
-                {/* SIMULATION */}
-
-                <SimulationTelemetry
-                  activeStreamId={
-                    activeStreamId
-                  }
-                  onResultReceived={
-                    handleLiveAudioResult
-                  }
-                />
+                
 
 
                 {/* JSON CONTRACT */}

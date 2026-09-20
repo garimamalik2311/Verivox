@@ -135,33 +135,7 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
         applyOfflineFallback()
       }
 
-      // Timeout fallback if backend is offline or delayed
-      setTimeout(() => {
-        if (!receivedResult && isTransmitting) {
-          applyOfflineFallback()
-        }
-      }, 2500)
-
-      function applyOfflineFallback() {
-        // Fallback simulation using the exact verified benchmark measurements
-        const fallbackResult = {
-          stream_id: activeStreamId,
-          window_id: Math.floor(Math.random() * 100) + 50,
-          ai_probability: selectedSample.expectedProb,
-          rolling_score: selectedSample.expectedProb,
-          risk_level: selectedSample.expectedRisk,
-          alert_triggered: selectedSample.expectedRisk === 'HIGH',
-          model_version: 'sprint2b-xgb-58d-calibrated',
-          feature_latency_ms: 15.2,
-          speech_detected: true,
-          timestamp: new Date().toLocaleTimeString(),
-        }
-        if (onResultReceived) {
-          onResultReceived(fallbackResult)
-        }
-        setStatusMessage(`Verified result simulated: ${selectedSample.expectedProb} (${selectedSample.expectedRisk})`)
-        setIsTransmitting(false)
-      }
+      
     } catch (err) {
       console.warn('Audio streaming exception, using verified benchmark payload:', err)
       if (onResultReceived) {
