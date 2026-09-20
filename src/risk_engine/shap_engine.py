@@ -18,16 +18,16 @@ SHAP TreeExplainer cannot explain that wrapper directly, so this module:
 
 Feature buckets from reports/feature_bucket_map.json:
 
-    Spectral : indices [13:18]
-    MFCC     : indices [0:13] + [18:30]
-    Prosody  : indices [30:56]
-    Energy   : indices [56:58]
+    Spectral       : indices [13:18]
+    MFCC           : indices [0:13] + [18:30]
+    MFCC Dynamics  : indices [30:56]
+    Pitch          : indices [56:58]
 
 NOTE:
-The bucket map labels [30:56] as "Prosody", although these are
-delta / delta-delta MFCC features.
+The [30:56] features are MFCC delta / delta-delta features.
+They describe spectral-envelope dynamics, not speech timing.
 
-The actual pitch/prosody signal lives at [56:58].
+The [56:58] features are F0 mean and F0 standard deviation.
 
 There is no standalone spectral-flatness or high-frequency-energy
 feature slot. Vocoder detection therefore uses aggregate SHAP
@@ -58,7 +58,7 @@ BUCKET_MAP_PATH = "reports/feature_bucket_map.json"
 # ---------------------------------------------------------------------------
 
 SPECTRAL_ARTIFACT_THRESHOLD = 0.05
-FLAT_TIMING_SHAP_THRESHOLD = 0.05
+MFCC_DYNAMICS_SHAP_THRESHOLD = 0.05
 
 
 class ShapEngine:
@@ -711,30 +711,29 @@ class ShapEngine:
             )
 
         # -------------------------------------------------------------------
-        # Prosody/timing bucket.
+        # -------------------------------------------------------------------
+        # MFCC dynamics bucket.
         #
-        # NOTE:
-        # The bucket map calls [30:56] "Prosody", although these are
-        # delta/delta-delta MFCC features.
+        # Indices [30:56] are MFCC delta/delta-delta features.
+        # They describe spectral-envelope dynamics, not speech timing.
         # -------------------------------------------------------------------
 
-        prosody_importance = (
+        mfcc_dynamics_importance = (
             self._bucket_importance(
                 shap_values,
-                "Prosody",
+                "MFCC Dynamics",
             )
         )
 
         if (
-            prosody_importance
-            > FLAT_TIMING_SHAP_THRESHOLD
+            mfcc_dynamics_importance
+            > MFCC_DYNAMICS_SHAP_THRESHOLD
         ):
 
             cues.append(
-                "flat_prosody_timing"
+                "mfcc_dynamics_signal"
             )
 
-        # -------------------------------------------------------------------
         # Top 5 SHAP features
         # -------------------------------------------------------------------
 
