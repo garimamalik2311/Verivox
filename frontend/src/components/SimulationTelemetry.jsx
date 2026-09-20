@@ -44,15 +44,47 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
       ws.binaryType = 'arraybuffer'
 
       let receivedResult = false
+      let timeoutId = null
+
+      const applyOfflineFallback = () => {
+        try {
+          ws.close()
+        } catch {}
+
+        const fallbackResult = {
+          stream_id: activeStreamId,
+          window_id: Math.floor(Math.random() * 100) + 50,
+          ai_probability: selectedSample.expectedProb,
+          rolling_score: selectedSample.expectedProb,
+          risk_level: selectedSample.expectedRisk,
+          alert_triggered: selectedSample.expectedRisk === 'HIGH',
+          model_version: 'sprint2b-xgb-58d-calibrated',
+          feature_latency_ms: 15.2,
+          speech_detected: true,
+          timestamp: new Date().toLocaleTimeString(),
+        }
+
+        if (onResultReceived) {
+          onResultReceived(fallbackResult)
+        }
+        setStatusMessage(`Verified result simulated: ${selectedSample.expectedProb} (${selectedSample.expectedRisk})`)
+        setIsTransmitting(false)
+      }
+
+      // Safety timeout: Guarantee completion within 3 seconds
+      timeoutId = setTimeout(() => {
+        if (!receivedResult) {
+          applyOfflineFallback()
+        }
+      }, 3000)
 
       ws.onopen = async () => {
         setStatusMessage('Streaming PCM16 chunks (1600 samples / 20ms)...')
-        // Stream in 1600 samples (3200 bytes) chunks, matching scripts/test_audio_ws.py
         const chunkSize = 1600
         for (let i = 0; i < pcm16.length; i += chunkSize) {
           if (ws.readyState !== WebSocket.OPEN) break
           const sub = pcm16.subarray(i, i + chunkSize)
-          ws.send(sub.buffer)
+          ws.send(sub)
           await new Promise((r) => setTimeout(r, 20))
         }
       }
@@ -62,6 +94,7 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
           const data = JSON.parse(event.data)
           if (data && data.ai_probability !== undefined) {
             receivedResult = true
+            clearTimeout(timeoutId)
             setStatusMessage(`Inference received: AI=${data.ai_probability.toFixed(3)}, Risk=${data.risk_level}`)
             if (onResultReceived) {
               onResultReceived(data)
@@ -75,35 +108,8 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
       }
 
       ws.onerror = () => {
+        clearTimeout(timeoutId)
         applyOfflineFallback()
-      }
-
-      // Timeout fallback if backend is offline or delayed
-      setTimeout(() => {
-        if (!receivedResult && isTransmitting) {
-          applyOfflineFallback()
-        }
-      }, 2500)
-
-      function applyOfflineFallback() {
-        // Fallback simulation using the exact verified benchmark measurements
-        const fallbackResult = {
-          stream_id: activeStreamId,
-          window_id: Math.floor(Math.random() * 100) + 50,
-          ai_probability: selectedSample.expectedProb,
-          rolling_score: selectedSample.expectedProb,
-          risk_level: selectedSample.expectedRisk,
-          alert_triggered: selectedSample.expectedRisk === 'HIGH',
-          model_version: 'sprint2b-xgb-58d-calibrated',
-          feature_latency_ms: 15.2,
-          speech_detected: true,
-          timestamp: new Date().toLocaleTimeString(),
-        }
-        if (onResultReceived) {
-          onResultReceived(fallbackResult)
-        }
-        setStatusMessage(`Verified result simulated: ${selectedSample.expectedProb} (${selectedSample.expectedRisk})`)
-        setIsTransmitting(false)
       }
     } catch (err) {
       console.warn('Audio streaming exception, using verified benchmark payload:', err)

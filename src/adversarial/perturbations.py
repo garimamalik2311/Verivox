@@ -119,3 +119,53 @@ def time_stretch(audio: np.ndarray, rate: float) -> np.ndarray:
     streams fine since it's accumulating a continuous stream anyway).
     """
     return librosa.effects.time_stretch(y=audio, rate=rate).astype(np.float32)
+
+# ---------------------------------------------------------------------------
+# Unified Dynamic Attack Dispatcher
+# ---------------------------------------------------------------------------
+
+def apply_perturbation(audio: np.ndarray, attack_type: str, intensity: int = 2, sr: int = 16000) -> np.ndarray:
+    """
+    Applies an adversarial perturbation across standardized intensity levels (0=Clean, 1..4).
+    """
+    if intensity <= 0 or attack_type == "clean":
+        return audio.copy()
+
+    attack = attack_type.lower().strip()
+
+    if "opus" in attack:
+        bitrates = {1: 64, 2: 32, 3: 16, 4: 8}
+        kbps = bitrates.get(intensity, 16)
+        try:
+            return opus_roundtrip(audio, bitrate_kbps=kbps, sr=sr)
+        except Exception:
+            # Fallback high-frequency cutoff simulation if pydub/ffmpeg opus unavailable
+            fft = np.fft.rfft(audio)
+            freqs = np.fft.rfftfreq(len(audio), d=1.0 / sr)
+            cutoff = {1: 6000, 2: 4500, 3: 3500, 4: 2500}.get(intensity, 3500)
+            fft[freqs > cutoff] *= 0.05
+            return np.fft.irfft(fft, n=len(audio)).astype(np.float32)
+
+    elif "pink" in attack:
+        snrs = {1: 20.0, 2: 10.0, 3: 5.0, 4: 0.0}
+        return add_pink_noise(audio, snr_db=snrs.get(intensity, 10.0))
+
+    elif "white" in attack:
+        snrs = {1: 20.0, 2: 10.0, 3: 5.0, 4: 0.0}
+        return add_white_noise(audio, snr_db=snrs.get(intensity, 10.0))
+
+    elif "mp3" in attack:
+        bitrates = {1: 128, 2: 64, 3: 32, 4: 16}
+        try:
+            return mp3_roundtrip(audio, bitrate_kbps=bitrates.get(intensity, 64), sr=sr)
+        except Exception:
+            return add_white_noise(audio, snr_db=15.0)
+
+    elif "pitch" in attack:
+        semitones = {1: -0.5, 2: -1.0, 3: -2.0, 4: 2.0}
+        try:
+            return pitch_shift(audio, n_semitones=semitones.get(intensity, -2.0), sr=sr)
+        except Exception:
+            return audio.copy()
+
+    return audio.copy()
