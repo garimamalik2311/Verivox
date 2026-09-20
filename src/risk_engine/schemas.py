@@ -57,6 +57,11 @@ class RiskResult(BaseModel):
     diagnostic_cues: list[str] = Field(default_factory=list)
     shap_top_features: list[int] = Field(default_factory=list)
 
+    # Detailed SHAP explanation for Deep Analytics.
+    # Contains the top feature identity, contribution magnitude,
+    # and contribution direction.
+    shap_features: list[dict] = Field(default_factory=list)
+
     # Sprint 1B SLA tracking
     latency_ms: float | None = None
     sla_breach: bool = False

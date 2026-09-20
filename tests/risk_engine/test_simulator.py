@@ -104,4 +104,4 @@ def test_alert_retriggers_after_recovery():
         if result.alert_triggered
     ]
 
-    assert alert_indices == [2, 10]
+    assert alert_indices == [2, 9]

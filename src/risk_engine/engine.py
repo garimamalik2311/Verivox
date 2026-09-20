@@ -60,17 +60,18 @@ class RiskEngine:
         else:
             self._consecutive_flags = 0
 
-        # 4. Determine whether HIGH evidence is persistent enough.
-        high_allowed = (
-            rolling_score >= HIGH_ENTER_THRESHOLD
-            and self._consecutive_flags >= self.required_consecutive_flags
+        # 4. Confirm AI voice after the required consecutive
+        # suspicious windows.
+        confirmed_ai = (
+            self._consecutive_flags >= self.required_consecutive_flags
         )
 
         # 5. Update risk state.
         risk_level = self.state_machine.update(
-    rolling_score,
-    allow_high=high_allowed,
-)
+            rolling_score,
+            allow_high=False,
+            confirmed_ai=confirmed_ai,
+        )
         
         # 6. Generate alert only when entering HIGH.
         alert_triggered, alert_reason = self.alert_manager.update(risk_level)

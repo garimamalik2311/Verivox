@@ -65,15 +65,22 @@ async def run_file(path, label):
 
 
 async def main():
-    await run_file(
-        "demo/real_voice.wav",
-        "REAL VOICE",
-    )
+    test_files = [
+        ("demo/real_voice.wav", "REAL VOICE"),
+        ("demo/real_voice1.wav", "REAL VOICE 1"),
+        ("demo/cloned_voice.wav", "CLONED VOICE"),
+        (
+            "demo/TTSOL-en-US-BrianMultilingual-20260915-074841.wav",
+            "TTSOL GENERATED VOICE",
+        ),
+        (
+            "demo/_Welcome to Echoes o.wav",
+            "WELCOME TO ECHOES VOICE",
+        ),
+    ]
 
-    await run_file(
-        "demo/cloned_voice.wav",
-        "CLONED VOICE",
-    )
+    for path, label in test_files:
+        await run_file(path, label)
 
 
 asyncio.run(main())

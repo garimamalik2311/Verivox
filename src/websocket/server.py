@@ -688,6 +688,11 @@ async def audio_websocket_endpoint(
 
     window_id = 0
 
+    # Once a synthetic-voice alert is triggered, terminate
+    # this audio stream and stop processing remaining audio.
+    stream_terminated = False
+
+
     # Holds incomplete VAD frame samples between
     # WebSocket packets.
     audio_remainder = np.empty(
@@ -1038,11 +1043,22 @@ async def audio_websocket_endpoint(
 
                     try:
 
-                        shap_result = (
-                            shap_engine.explain(
-                                features
+                        # Run SHAP only for suspicious windows to preserve
+                        # real-time latency. Normal windows skip SHAP.
+                        shap_result = {
+                            "vocoder_flag": False,
+                            "diagnostic_cues": [],
+                            "shap_top_features": [],
+                            "shap_features": [],
+                        }
+
+
+                        if ai_probability >= 0.50:
+                            shap_result = (
+                                shap_engine.explain(
+                                    features
+                                )
                             )
-                        )
 
                     except Exception as exc:
 
@@ -1057,6 +1073,7 @@ async def audio_websocket_endpoint(
                             "vocoder_flag": False,
                             "diagnostic_cues": [],
                             "shap_top_features": [],
+                            "shap_features": [],
                         }
 
                     # --------------------------------------------------------
@@ -1135,6 +1152,12 @@ async def audio_websocket_endpoint(
                                     [],
                                 )
                             ),
+                            "shap_features": (
+                                shap_result.get(
+                                    "shap_features",
+                                    [],
+                                )
+                            ),
                             "latency_ms": (
                                 latency_ms
                             ),
@@ -1177,6 +1200,32 @@ async def audio_websocket_endpoint(
                     await broadcast_result(
                         result
                     )
+
+                    # --------------------------------------------------------
+                    # HARD STOP after confirmed synthetic-voice alert
+                    # --------------------------------------------------------
+                    if result.alert_triggered:
+                        print(
+                            f"[audio] HARD STOP: "
+                            f"synthetic voice alert triggered "
+                            f"for stream={stream_id} "
+                            f"window={window_id}"
+                        )
+
+                        stream_terminated = True
+                        break
+
+                # Stop processing additional VAD frames from this packet.
+                if stream_terminated:
+                    break
+
+            # Stop receiving additional WebSocket packets.
+            if stream_terminated:
+                print(
+                    f"[audio] TERMINATING stream={stream_id} "
+                    f"after synthetic-voice alert"
+                )
+                break
 
     except WebSocketDisconnect:
 
