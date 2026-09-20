@@ -6,8 +6,10 @@ import joblib
 import numpy as np
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
+from src.adversarial.router import router as adversarial_router
 from src.config import VAD_FRAME_SAMPLES
 from src.features import extract_features
 from src.risk_engine.schemas import ModelPrediction
@@ -27,6 +29,18 @@ from src.speaker_verifier import SpeakerVerifier
 
 
 app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(adversarial_router)
+
 
 
 # ============================================================================

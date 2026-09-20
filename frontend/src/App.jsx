@@ -32,7 +32,6 @@ import {
 } from 'lucide-react'
 
 import AdversarialRobustness from './components/AdversarialRobustness'
-import SimulationTelemetry from './components/SimulationTelemetry'
 import AudioPlaybackBar from './components/AudioPlaybackBar'
 
 
@@ -2536,16 +2535,7 @@ export default function App() {
                 </div>
 
 
-                {/* SIMULATION */}
-
-                <SimulationTelemetry
-                  activeStreamId={
-                    activeStreamId
-                  }
-                  onResultReceived={
-                    handleLiveAudioResult
-                  }
-                />
+                
 
 
                 {/* JSON CONTRACT */}
@@ -2590,26 +2580,14 @@ export default function App() {
 
         {activePage === 'adversarial' && (
           <div className="space-y-8 max-w-6xl mx-auto">
-
-            {/*
-             * This section is intentionally allowed
-             * to contain hardcoded benchmark/demo values.
-             */}
             <AdversarialRobustness />
 
-            <SimulationTelemetry
-              activeStreamId={
-                activeStreamId
-              }
-              onResultReceived={
-                handleLiveAudioResult
-              }
-            />
+      
 
           </div>
         )}
 
-
+ 
         {/* ===================================================
             ANALYTICS
            =================================================== */}
