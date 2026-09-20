@@ -49,7 +49,7 @@ def extract_features(y: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
     sb = float(np.mean(librosa.feature.spectral_bandwidth(S=S, sr=sr))) / nyquist
     ro = float(np.mean(librosa.feature.spectral_rolloff(S=S_power, sr=sr))) / nyquist
     zcr = float(np.mean(librosa.feature.zero_crossing_rate(y=y, hop_length=HOP_LENGTH)))
-    rms = float(np.mean(librosa.feature.rms(S=S, frame_length=N_FFT)))
+    rms = float(np.mean(librosa.feature.rms(S=S, frame_length=1024)))
 
     spectral = np.array([sc, sb, ro, zcr, rms], dtype=np.float32)
 
@@ -69,7 +69,7 @@ def extract_features(y: np.ndarray, sr: int = SAMPLE_RATE) -> np.ndarray:
         try:
             vad = webrtcvad.Vad(2)
             frame_len = int(sr * 0.02)
-            pcm_data = (y * 32767).astype(np.int16).tobytes()
+            pcm_data = (np.clip(y, -1.0, 1.0) * 32767.0).astype(np.int16).tobytes()
             speech_count = 0
             total_frames = 0
             frame_bytes = frame_len * 2
