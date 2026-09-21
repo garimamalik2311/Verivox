@@ -29,6 +29,7 @@ class RiskResult(BaseModel):
     ai_probability: float = Field(ge=0.0, le=1.0)
     rolling_score: float = Field(ge=0.0, le=1.0)
     consecutive_flags: int = Field(ge=0)
+    yin_analysis: dict | None = None
 
     risk_level: RiskLevel
 

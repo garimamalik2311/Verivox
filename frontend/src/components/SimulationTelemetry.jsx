@@ -1,12 +1,29 @@
 import React, { useState, useRef } from 'react'
 import { Play, CheckCircle2, AlertTriangle, Radio, Loader2 } from 'lucide-react'
 import { demoSamples } from '../data/adversarialData'
+import AudioPlaybackBar from './AudioPlaybackBar'
 
 export default function SimulationTelemetry({ activeStreamId = 'call_001', onResultReceived }) {
   const [selectedSampleId, setSelectedSampleId] = useState('clean')
   const [isTransmitting, setIsTransmitting] = useState(false)
   const [statusMessage, setStatusMessage] = useState(null)
   const audioContextRef = useRef(null)
+
+  // --- Added by Garima (Sprint 1): Audio Playback Bar ---
+  const [isPlayingBack, setIsPlayingBack] = useState(false)
+  const [playbackLevel, setPlaybackLevel] = useState(0)
+  const playbackSourceRef = useRef(null)
+  const analyserRef = useRef(null)
+  const meterIntervalRef = useRef(null)
+
+  const stopPlaybackMeter = () => {
+    if (meterIntervalRef.current) {
+      clearInterval(meterIntervalRef.current)
+      meterIntervalRef.current = null
+    }
+    setPlaybackLevel(0)
+    setIsPlayingBack(false)
+  }
 
   const selectedSample = demoSamples.find((s) => s.id === selectedSampleId) || demoSamples[0]
 
@@ -29,6 +46,31 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
       const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer)
       const channelData = audioBuffer.getChannelData(0) // Float32 array [-1.0, 1.0]
 
+      // --- Added by Garima (Sprint 1): audible playback of what's being
+      // transmitted, using the SAME decoded buffer (no double-decode). ---
+      const playbackSource = audioCtx.createBufferSource()
+      playbackSource.buffer = audioBuffer
+
+      const analyser = audioCtx.createAnalyser()
+      analyser.fftSize = 256
+      const levelData = new Uint8Array(analyser.frequencyBinCount)
+
+      playbackSource.connect(analyser)
+      analyser.connect(audioCtx.destination)
+      playbackSourceRef.current = playbackSource
+      analyserRef.current = analyser
+
+      playbackSource.start()
+      setIsPlayingBack(true)
+
+      meterIntervalRef.current = setInterval(() => {
+        analyser.getByteFrequencyData(levelData)
+        const avg = levelData.reduce((a, b) => a + b, 0) / levelData.length
+        setPlaybackLevel(Math.min(Math.round((avg / 255) * 150), 100))
+      }, 80)
+
+      playbackSource.onended = stopPlaybackMeter
+
       // 3. Convert float32 to PCM16 binary buffer
       const pcm16 = new Int16Array(channelData.length)
       for (let i = 0; i < channelData.length; i++) {
@@ -44,15 +86,70 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
       ws.binaryType = 'arraybuffer'
 
       let receivedResult = false
+      let timeoutId = null
+
+            const applyOfflineFallback = () => {
+        try {
+          ws.close()
+        } catch {}
+
+        const fallbackResult = {
+          stream_id: activeStreamId,
+          window_id: Math.floor(Math.random() * 100) + 50,
+          ai_probability: selectedSample.expectedProb,
+          rolling_score: selectedSample.expectedProb,
+          risk_level: selectedSample.expectedRisk,
+          alert_triggered: selectedSample.expectedRisk === 'HIGH',
+          model_version: 'sprint2b-xgb-58d-calibrated',
+          feature_latency_ms: 15.2,
+          speech_detected: true,
+          timestamp: new Date().toLocaleTimeString(),
+          prosody: {
+            status: selectedSample.expectedRisk === 'HIGH' ? 'anomalous' : 'normal',
+            rhythm_score: '88/100',
+            pitch_variance: 'Low',
+            pause_regularity: 'Highly Synthetic',
+          },
+          speaker_verification: {
+            status: selectedSample.expectedRisk === 'HIGH' ? 'mismatch' : 'verified',
+            enrolled_speaker: 'Authorized User',
+            match_score: selectedSample.expectedRisk === 'HIGH' ? 0.12 : 0.95,
+          },
+          vocoder_fingerprint: {
+            confidence: 0.94,
+            detected_tool: selectedSample.expectedRisk === 'HIGH' ? 'ElevenLabs v2' : 'None',
+            artifact_signature: selectedSample.expectedRisk === 'HIGH' ? 'High-freq phase distortion' : 'Clean',
+          },
+          explainability: {
+            primary_driver: selectedSample.expectedRisk === 'HIGH' ? 'Unnatural pitch stability' : 'Natural frequency variance',
+            factors: selectedSample.expectedRisk === 'HIGH'
+              ? ['Missing breath sounds', 'Zero background noise variation']
+              : ['Standard acoustic profile'],
+          },
+        }
+
+        if (onResultReceived) {
+          onResultReceived(fallbackResult)
+        }
+        setStatusMessage(`Verified result simulated: ${selectedSample.expectedProb} (${selectedSample.expectedRisk})`)
+        setIsTransmitting(false)
+      }
+
+
+      // Safety timeout: Guarantee completion within 3 seconds
+      timeoutId = setTimeout(() => {
+        if (!receivedResult) {
+          applyOfflineFallback()
+        }
+      }, 3000)
 
       ws.onopen = async () => {
         setStatusMessage('Streaming PCM16 chunks (1600 samples / 20ms)...')
-        // Stream in 1600 samples (3200 bytes) chunks, matching scripts/test_audio_ws.py
         const chunkSize = 1600
         for (let i = 0; i < pcm16.length; i += chunkSize) {
           if (ws.readyState !== WebSocket.OPEN) break
           const sub = pcm16.subarray(i, i + chunkSize)
-          ws.send(sub.buffer)
+          ws.send(sub)
           await new Promise((r) => setTimeout(r, 20))
         }
       }
@@ -62,6 +159,7 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
           const data = JSON.parse(event.data)
           if (data && data.ai_probability !== undefined) {
             receivedResult = true
+            clearTimeout(timeoutId)
             setStatusMessage(`Inference received: AI=${data.ai_probability.toFixed(3)}, Risk=${data.risk_level}`)
             if (onResultReceived) {
               onResultReceived(data)
@@ -75,62 +173,12 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
       }
 
       ws.onerror = () => {
+        clearTimeout(timeoutId)
         applyOfflineFallback()
-      }
-
-      // Timeout fallback if backend is offline or delayed
-      setTimeout(() => {
-        if (!receivedResult && isTransmitting) {
-          applyOfflineFallback()
-        }
-      }, 2500)
-
-      function applyOfflineFallback() {
-        // Fallback simulation using the exact verified benchmark measurements
-        const fallbackResult = {
-          stream_id: activeStreamId,
-          window_id: Math.floor(Math.random() * 100) + 50,
-          ai_probability: selectedSample.expectedProb,
-          rolling_score: selectedSample.expectedProb,
-          risk_level: selectedSample.expectedRisk,
-          alert_triggered: selectedSample.expectedRisk === 'HIGH',
-          model_version: 'sprint2b-xgb-58d-calibrated',
-          feature_latency_ms: 15.2,
-          speech_detected: true,
-          timestamp: new Date().toLocaleTimeString(),
-          
-          // ADDED ANALYTICS PAYLOAD
-          prosody: {
-            status: selectedSample.expectedRisk === 'HIGH' ? 'anomalous' : 'normal',
-            rhythm_score: '88/100',
-            pitch_variance: 'Low',
-            pause_regularity: 'Highly Synthetic'
-          },
-          speaker_verification: {
-            status: selectedSample.expectedRisk === 'HIGH' ? 'mismatch' : 'verified',
-            enrolled_speaker: 'Authorized User',
-            match_score: selectedSample.expectedRisk === 'HIGH' ? 0.12 : 0.95
-          },
-          vocoder_fingerprint: {
-            confidence: 0.94,
-            detected_tool: selectedSample.expectedRisk === 'HIGH' ? 'ElevenLabs v2' : 'None',
-            artifact_signature: selectedSample.expectedRisk === 'HIGH' ? 'High-freq phase distortion' : 'Clean'
-          },
-          explainability: {
-            primary_driver: selectedSample.expectedRisk === 'HIGH' ? 'Unnatural pitch stability' : 'Natural frequency variance',
-            factors: selectedSample.expectedRisk === 'HIGH' 
-              ? ['Missing breath sounds', 'Zero background noise variation'] 
-              : ['Standard acoustic profile']
-          }
-        }
-        if (onResultReceived) {
-          onResultReceived(fallbackResult)
-        }
-        setStatusMessage(`Verified result simulated: ${selectedSample.expectedProb} (${selectedSample.expectedRisk})`)
-        setIsTransmitting(false)
       }
     } catch (err) {
       console.warn('Audio streaming exception, using verified benchmark payload:', err)
+      stopPlaybackMeter()
       if (onResultReceived) {
         onResultReceived({
           stream_id: activeStreamId,
@@ -142,35 +190,27 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
           model_version: 'sprint2b-xgb-58d-calibrated',
           feature_latency_ms: 15.2,
           speech_detected: true,
-          
-          // ADDED ANALYTICS PAYLOAD
-          prosody: {
-            status: selectedSample.expectedRisk === 'HIGH' ? 'anomalous' : 'normal',
-            rhythm_score: '88/100',
-            pitch_variance: 'Low',
-            pause_regularity: 'Highly Synthetic'
-          },
-          speaker_verification: {
-            status: selectedSample.expectedRisk === 'HIGH' ? 'mismatch' : 'verified',
-            enrolled_speaker: 'Authorized User',
-            match_score: selectedSample.expectedRisk === 'HIGH' ? 0.12 : 0.95
-          },
-          vocoder_fingerprint: {
-            confidence: 0.94,
-            detected_tool: selectedSample.expectedRisk === 'HIGH' ? 'ElevenLabs v2' : 'None',
-            artifact_signature: selectedSample.expectedRisk === 'HIGH' ? 'High-freq phase distortion' : 'Clean'
-          },
-          explainability: {
-            primary_driver: selectedSample.expectedRisk === 'HIGH' ? 'Unnatural pitch stability' : 'Natural frequency variance',
-            factors: selectedSample.expectedRisk === 'HIGH' 
-              ? ['Missing breath sounds', 'Zero background noise variation'] 
-              : ['Standard acoustic profile']
-          }
         })
       }
       setIsTransmitting(false)
       setStatusMessage(`Verified result loaded: ${selectedSample.expectedProb}`)
     }
+  }
+
+  // --- Added by Garima (Sprint 1): manual stop/mute for the playback bar ---
+  const togglePlayback = () => {
+    if (isPlayingBack && playbackSourceRef.current) {
+      try {
+        playbackSourceRef.current.stop()
+      } catch {
+        // already stopped
+      }
+      stopPlaybackMeter()
+    }
+    // Starting playback independently of transmission isn't supported —
+    // playback is tied to "Transmit window" so what you hear always
+    // matches what's being analyzed. The button here only allows muting
+    // a playback already in progress.
   }
 
   return (
@@ -218,6 +258,15 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
             </>
           )}
         </button>
+
+        {/* --- Added by Garima (Sprint 1): Audio Playback Bar --- */}
+        <AudioPlaybackBar
+          label="Now playing sample"
+          isPlaying={isPlayingBack}
+          level={playbackLevel}
+          onToggle={togglePlayback}
+          disabled={!isPlayingBack}
+        />
 
         {statusMessage && (
           <div className="text-[11px] font-mono text-cyan-300 bg-cyan-950/30 border border-cyan-500/20 p-2 rounded-lg flex items-center gap-2">

@@ -1,4 +1,5 @@
 import os
+import warnings
 import numpy as np
 import pandas as pd
 import librosa
@@ -7,8 +8,11 @@ from tqdm import tqdm
 from src.features import extract_features
 from src.config import SAMPLE_RATE, WINDOW_STRIDE_SAMPLES
 
+# Suppress harmless pitch estimation warnings on silent frames
+warnings.filterwarnings("ignore", category=UserWarning, module="librosa")
+
 def slice_and_extract(filepath: str):
-    """Loads audio and extracts 30-D features from 1-second sliding windows."""
+    """Loads audio and extracts 58-D features from 1-second sliding windows."""
     try:
         y, _ = librosa.load(filepath, sr=SAMPLE_RATE, mono=True)
     except Exception:
@@ -26,7 +30,7 @@ def slice_and_extract(filepath: str):
 def run(manifest_csv: str = "data/processed/manifest.csv"):
     df = pd.read_csv(manifest_csv)
 
-    # Balance across both language ('en', 'hi') and label (0, 1)
+    # Balance across both language ('en', 'hi', 'ta') and label (0, 1)
     df["strat_key"] = df["label"].astype(str) + "_" + df["language"].astype(str)
 
     # 1. Carve out a ~15% holdout test set (stratified + speaker-disjoint)
@@ -67,7 +71,7 @@ def run(manifest_csv: str = "data/processed/manifest.csv"):
         np.save(f"data/processed/y_{name}.npy", y_arr)
         print(f"Saved {name}: {X_arr.shape} windows, Balance (0:Real, 1:Fake): {np.bincount(y_arr)}")
 
-    # Backward compatibility: save 100-sample mini slice for quick iteration
+    # Mini slice for quick iteration testing
     X_test = np.load("data/processed/X_test.npy")
     y_test = np.load("data/processed/y_test.npy")
     np.save("data/processed/X_test_mini.npy", X_test[:100])

@@ -52,3 +52,18 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
+
+## Known issue: segfault on server startup (macOS)
+
+If `uvicorn src.websocket.server:app` crashes with a segmentation fault
+(no Python traceback, just "zsh: segmentation fault"), this is caused by
+PyTorch and XGBoost each bundling their own private copy of the OpenMP
+library, which conflict when both load in the same process.
+
+**Fix:**
+```bash
+brew install libomp
+export DYLD_INSERT_LIBRARIES=/opt/homebrew/opt/libomp/lib/libomp.dylib
+```
+Add that `export` line to your `venv/bin/activate` script so it's set
+automatically every time you activate the virtual environment.

@@ -1,918 +1,1463 @@
 
-# ================================================================
-# FFmpeg DLL SETUP
-# IMPORTANT: This MUST come before importing `datasets`
-# ================================================================
+"""
+Verivox balanced audio dataset downloader.
 
-import os
+Target dataset: 1,800 WAV files
 
-FFMPEG_BIN = (
-    r"C:\Users\Jaanvi\AppData\Local\Microsoft\WinGet\Packages"
-    r"\Gyan.FFmpeg.Shared_Microsoft.Winget.Source_8wekyb3d8bbwe"
-    r"\ffmpeg-9.0.1-full_build-shared\bin"
-)
+Composition
+------------
+bonafide_en:
+    150 Indian English REAL  - ai4bharat/Svarah
+    150 Foreign English REAL - garystafford/deepfake-audio-detection
 
-if os.path.isdir(FFMPEG_BIN):
-    os.add_dll_directory(FFMPEG_BIN)
+spoof_en:
+    150 Indian English FAKE  - SherryT997/IndicTTS-Deepfake-Challenge-Data
+    150 Foreign English FAKE - garystafford/deepfake-audio-detection
 
-    os.environ["PATH"] = (
-        FFMPEG_BIN
-        + os.pathsep
-        + os.environ.get("PATH", "")
-    )
+bonafide_hi:
+    300 Hindi REAL - SherryT997/IndicTTS-Deepfake-Challenge-Data
 
-    print(
-        f"FFmpeg DLL directory added: {FFMPEG_BIN}"
-    )
-else:
-    print(
-        f"WARNING: FFmpeg DLL directory not found: "
-        f"{FFMPEG_BIN}"
-    )
+spoof_hi:
+    300 Hindi FAKE - SherryT997/IndicTTS-Deepfake-Challenge-Data
 
+bonafide_ta:
+    300 Tamil REAL - ai4bharat/IndicVoices
 
-# ================================================================
-# IMPORTS
-# ================================================================
+spoof_ta:
+    300 Tamil FAKE - SherryT997/IndicTTS-Deepfake-Challenge-Data
 
+Run from project root:
+    python -m src.dataset
+"""
+
+from pathlib import Path
 import io
+import time
 
-import soundfile as sf
 import numpy as np
-
+import soundfile as sf
 from datasets import load_dataset
-from tqdm import tqdm
 
 
-# ================================================================
-# CONFIG
-# ================================================================
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
-RAW_DIR = "data/raw"
+RAW_DIR = Path("data/raw")
+SAMPLE_RATE = 16000
+
+TARGETS = {
+    "bonafide_en": 300,
+    "spoof_en": 300,
+    "bonafide_hi": 300,
+    "spoof_hi": 300,
+    "bonafide_ta": 300,
+    "spoof_ta": 300,
+}
+
+TOTAL_TARGET = 1800
+
+# Source-specific targets.
+SOURCE_TARGETS = {
+    "svarah_real_en": 150,
+    "gary_real_en": 150,
+    "indictts_fake_en": 150,
+    "gary_fake_en": 150,
+    "indictts_real_hi": 300,
+    "indictts_fake_hi": 300,
+    "indictts_fake_ta": 300,
+    "indicvoices_real_ta": 300,
+}
 
 
-# ================================================================
-# AUDIO WRITER
-# ================================================================
+# ============================================================
+# DATASET NAMES
+# ============================================================
 
-def write_audio(
-    data,
-    sr,
-    category: str,
-    lang: str,
-    speaker_id: str,
-    idx: int,
-):
+SVARAH_DATASET = "ai4bharat/Svarah"
+SVARAH_SPLIT = "test"
+
+GARY_DATASET = "garystafford/deepfake-audio-detection"
+GARY_SPLIT = "train"
+
+INDICTTS_DATASET = "SherryT997/IndicTTS-Deepfake-Challenge-Data"
+INDICTTS_SPLIT = "train"
+
+INDICVOICES_DATASET = "ai4bharat/IndicVoices"
+
+# IMPORTANT:
+# IndicVoices does NOT have a "test" split in the current dataset.
+# Available splits are train and valid.
+INDICVOICES_SPLIT = "valid"
+INDICVOICES_CONFIG = "tamil"
+
+
+# ============================================================
+# DIRECTORY / FILE HELPERS
+# ============================================================
+
+def ensure_directories():
+    for bucket in TARGETS:
+        (RAW_DIR / bucket).mkdir(parents=True, exist_ok=True)
+
+
+def wav_files(bucket):
+    """Return all WAV files in a bucket recursively."""
+    directory = RAW_DIR / bucket
+
+    if not directory.exists():
+        return []
+
+    return sorted(directory.rglob("*.wav"))
+
+
+def count_files(bucket):
+    return len(wav_files(bucket))
+
+
+def total_files():
+    return sum(count_files(bucket) for bucket in TARGETS)
+
+
+def numeric_index(path):
     """
-    Safely saves audio numpy arrays or raw byte streams to disk.
+    Extract the trailing numeric part from filenames such as:
+
+        bonafide_en_0001.wav
+        spoof_hi_0235.wav
+
+    Returns -1 if no numeric suffix exists.
     """
-
-    dir_name = f"{category}_{lang}"
-
-    out_dir = os.path.join(
-        RAW_DIR,
-        dir_name,
-        str(speaker_id),
-    )
-
-    os.makedirs(
-        out_dir,
-        exist_ok=True,
-    )
-
-    out_path = os.path.join(
-        out_dir,
-        f"{dir_name}_{idx}.wav",
-    )
-
     try:
-
-        # --------------------------------------------------------
-        # NumPy audio array
-        # --------------------------------------------------------
-
-        if isinstance(data, np.ndarray):
-
-            if data.ndim > 1:
-                data = np.mean(
-                    data,
-                    axis=1,
-                )
-
-            if sr is None:
-                sr = 16000
-
-            sf.write(
-                out_path,
-                data.astype(np.float32),
-                sr,
-            )
-
-            return True
-
-        # --------------------------------------------------------
-        # Raw audio bytes
-        # --------------------------------------------------------
-
-        elif isinstance(data, bytes):
-
-            with io.BytesIO(data) as bio:
-
-                arr, file_sr = sf.read(bio)
-
-            if arr.ndim > 1:
-                arr = np.mean(
-                    arr,
-                    axis=1,
-                )
-
-            sf.write(
-                out_path,
-                arr.astype(np.float32),
-                file_sr,
-            )
-
-            return True
-
-    except Exception as e:
-
-        print(
-            f"Audio write error for {out_path}: {e}"
-        )
-
-    return False
+        return int(path.stem.rsplit("_", 1)[-1])
+    except (ValueError, IndexError):
+        return -1
 
 
-# ================================================================
-# HELPER: EXTRACT AUDIO FROM HF DATASET ITEM
-# ================================================================
+def next_index(bucket):
+    """
+    Get the next global file number for a bucket.
+
+    This avoids overwriting files if the downloader is resumed.
+    """
+    files = wav_files(bucket)
+
+    if not files:
+        return 1
+
+    maximum = max(numeric_index(path) for path in files)
+
+    if maximum >= 0:
+        return maximum + 1
+
+    return len(files) + 1
+
+
+def speaker_directory(bucket, speaker):
+    directory = RAW_DIR / bucket / speaker
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def output_path(bucket, speaker, index):
+    directory = speaker_directory(bucket, speaker)
+
+    return directory / f"{bucket}_{index:04d}.wav"
+
+
+# ============================================================
+# AUDIO DECODING
+# ============================================================
 
 def get_audio_from_item(item):
     """
-    Safely extracts audio from a Hugging Face dataset item.
+    Extract audio and sample rate from Hugging Face dataset rows.
 
     Supports:
-        - {"array": ..., "sampling_rate": ...}
-        - {"bytes": ...}
+        - TorchCodec AudioDecoder
+        - HF Audio dictionaries
         - raw bytes
+        - numpy arrays
+        - lists
+        - audio_filepath / audio_file fields
     """
 
-    audio_obj = None
+    audio = None
 
-    # Do NOT use:
-    # item.get("audio") or item.get("audio_file")
-    #
-    # because NumPy arrays can trigger:
-    # "The truth value of an array is ambiguous"
+    # --------------------------------------------------------
+    # Find the audio field
+    # --------------------------------------------------------
 
-    possible_keys = [
-        "audio_filepath",
+    for key in (
         "audio",
+        "audio_filepath",
         "audio_file",
         "audio_data",
-    ]
-
-    for key in possible_keys:
-
-        if key in item:
-
-            value = item[key]
-
-            if value is not None:
-                audio_obj = value
-                break
-
-    if audio_obj is None:
-        return None, None
-
-
-    # ------------------------------------------------------------
-    # Audio dictionary
-    # ------------------------------------------------------------
-
-    if isinstance(audio_obj, dict):
-
-        # Decoded NumPy array
-        if (
-            "array" in audio_obj
-            and audio_obj["array"] is not None
-        ):
-
-            return (
-                np.asarray(
-                    audio_obj["array"]
-                ),
-                audio_obj.get(
-                    "sampling_rate",
-                    16000,
-                ),
-            )
-
-        # Raw bytes
-        if (
-            "bytes" in audio_obj
-            and audio_obj["bytes"]
-        ):
-
-            return (
-                audio_obj["bytes"],
-                None,
-            )
-
-
-    # ------------------------------------------------------------
-    # Raw bytes
-    # ------------------------------------------------------------
-
-    if isinstance(
-        audio_obj,
-        bytes,
     ):
+        if key in item and item[key] is not None:
+            audio = item[key]
+            break
 
-        return (
-            audio_obj,
-            None,
+    if audio is None:
+        raise ValueError(
+            f"No audio field found. Available fields: {list(item.keys())}"
         )
 
+    # --------------------------------------------------------
+    # TorchCodec AudioDecoder
+    # --------------------------------------------------------
 
-    return None, None
+    if hasattr(audio, "get_all_samples"):
+        samples = audio.get_all_samples()
+
+        data = samples.data
+        sample_rate = int(samples.sample_rate)
+
+        # Torch tensors -> numpy
+        if hasattr(data, "detach"):
+            data = data.detach().cpu().numpy()
+
+        data = np.asarray(data)
+
+        # Usually TorchCodec gives [channels, time]
+        if data.ndim == 2:
+            if data.shape[0] <= 8 and data.shape[1] > data.shape[0]:
+                data = data.mean(axis=0)
+            else:
+                data = data.mean(axis=1)
+
+        return np.asarray(data), sample_rate
+
+    # --------------------------------------------------------
+    # Hugging Face Audio dictionary
+    # --------------------------------------------------------
+
+    if isinstance(audio, dict):
+
+        sample_rate = audio.get("sampling_rate")
+
+        # Decoded array
+        if audio.get("array") is not None:
+            data = np.asarray(audio["array"])
+
+            if data.ndim == 2:
+                if data.shape[0] <= 8 and data.shape[1] > data.shape[0]:
+                    data = data.mean(axis=0)
+                else:
+                    data = data.mean(axis=1)
+
+            return data, int(sample_rate or SAMPLE_RATE)
+
+        # Encoded bytes
+        if audio.get("bytes") is not None:
+            raw = audio["bytes"]
+
+            data, sr = sf.read(io.BytesIO(raw), dtype="float32")
+
+            if data.ndim == 2:
+                data = data.mean(axis=1)
+
+            return data, int(sr)
+
+        # Path
+        if audio.get("path"):
+            data, sr = sf.read(audio["path"], dtype="float32")
+
+            if data.ndim == 2:
+                data = data.mean(axis=1)
+
+            return data, int(sr)
+
+    # --------------------------------------------------------
+    # Raw bytes
+    # --------------------------------------------------------
+
+    if isinstance(audio, (bytes, bytearray)):
+        data, sr = sf.read(io.BytesIO(audio), dtype="float32")
+
+        if data.ndim == 2:
+            data = data.mean(axis=1)
+
+        return data, int(sr)
+
+    # --------------------------------------------------------
+    # Numpy / list
+    # --------------------------------------------------------
+
+    if isinstance(audio, (np.ndarray, list, tuple)):
+        data = np.asarray(audio)
+
+        if data.ndim == 2:
+            if data.shape[0] <= 8 and data.shape[1] > data.shape[0]:
+                data = data.mean(axis=0)
+            else:
+                data = data.mean(axis=1)
+
+        return data, SAMPLE_RATE
+
+    # --------------------------------------------------------
+    # Audio path
+    # --------------------------------------------------------
+
+    if isinstance(audio, str):
+        data, sr = sf.read(audio, dtype="float32")
+
+        if data.ndim == 2:
+            data = data.mean(axis=1)
+
+        return data, int(sr)
+
+    raise TypeError(
+        f"Unsupported audio type: {type(audio)}"
+    )
 
 
-# ================================================================
-# MAIN DATASET DOWNLOAD FUNCTION
-# ================================================================
+def save_audio(audio, path):
+    """
+    Save audio as mono 16 kHz WAV.
+    """
 
-def download_dataset(
-    samples_per_bucket: int = 150
+    data, sr = get_audio_from_item(audio) if isinstance(audio, dict) else audio
+
+    data = np.asarray(data)
+
+    # Convert stereo/multichannel to mono.
+    if data.ndim == 2:
+        if data.shape[0] <= 8 and data.shape[1] > data.shape[0]:
+            data = data.mean(axis=0)
+        else:
+            data = data.mean(axis=1)
+
+    data = data.astype(np.float32)
+
+    # Resampling.
+    if sr != SAMPLE_RATE:
+        try:
+            import librosa
+
+            data = librosa.resample(
+                data,
+                orig_sr=sr,
+                target_sr=SAMPLE_RATE,
+            )
+
+        except ImportError:
+            raise RuntimeError(
+                "librosa is required for resampling. "
+                "Install it with: pip install librosa"
+            )
+
+    # Prevent clipping.
+    peak = np.max(np.abs(data)) if len(data) else 0
+
+    if peak > 1.0:
+        data = data / peak
+
+    sf.write(
+        str(path),
+        data,
+        SAMPLE_RATE,
+        subtype="PCM_16",
+    )
+
+
+# ============================================================
+# SAFE DATASET LOADING
+# ============================================================
+
+def load_streaming(dataset_name, split, config=None):
+    """
+    Load a dataset in streaming mode.
+
+    Streaming is important because IndicTTS is large.
+    """
+
+    kwargs = {
+        "path": dataset_name,
+        "split": split,
+        "streaming": True,
+    }
+
+    if config is not None:
+        kwargs["name"] = config
+
+    return load_dataset(**kwargs)
+
+
+# ============================================================
+# GENERIC COLLECTOR
+# ============================================================
+
+def collect_dataset(
+    dataset,
+    bucket,
+    target,
+    speaker_prefix,
+    predicate,
+    label,
+    max_scan=None,
 ):
+    """
+    Collect up to `target` samples from a streaming dataset.
 
-    print(
-        "================================================================="
-    )
-    print(
-        "=== Downloading 4-Quadrant Accent-Balanced Audio Dataset ==="
-    )
-    print(
-        "================================================================="
-    )
+    Existing files are respected.
 
-    half_bucket = (
-        samples_per_bucket // 2
-    )
+    IMPORTANT:
+    This function never downloads more than the requested target.
+    """
 
+    existing = count_files(bucket)
 
-    # ============================================================
-    # 1. REAL ENGLISH
-    # bonafide_en
-    # Label = 0
-    #
-    # 50% Indian English
-    # 50% Western English
-    # ============================================================
-
-    print(
-        "\n1. Fetching Real English "
-        "(50% Indian + 50% Western)..."
-    )
-
-    count_en_real = 0
-
-
-    # ------------------------------------------------------------
-    # 1A. Indian Real English
-    # Svarah
-    # ------------------------------------------------------------
-
-    try:
-
+    if existing >= target:
         print(
-            "\nTrying Svarah..."
+            f"{bucket}: already has {existing}/{target}. Skipping."
         )
+        return existing
 
-        ds_svarah = load_dataset(
-            "ai4bharat/Svarah",
-            split="test",
-            streaming=True,
-        )
+    remaining = target - existing
+    start = next_index(bucket)
 
-        for item in tqdm(
-            ds_svarah,
-            total=half_bucket,
-            desc="Real Indic-EN",
-        ):
+    print()
+    print("-" * 65)
+    print(f"Downloading: {label}")
+    print(f"Bucket:      {bucket}")
+    print(f"Target:      {target}")
+    print(f"Existing:    {existing}")
+    print(f"Remaining:   {remaining}")
+    print("-" * 65)
 
-            if count_en_real >= half_bucket:
-                break
+    downloaded = 0
+    scanned = 0
 
-            try:
+    for item in dataset:
 
-                data, sr = (
-                    get_audio_from_item(item)
-                )
+        scanned += 1
 
-                if data is None:
-                    continue
-
-                speaker = item.get(
-                    "speaker_id",
-                    f"svarah_{count_en_real % 20}",
-                )
-
-                spk = (
-                    f"svarah_{speaker}"
-                )[:30]
-
-                if write_audio(
-                    data,
-                    sr,
-                    "bonafide",
-                    "en",
-                    spk,
-                    count_en_real,
-                ):
-
-                    count_en_real += 1
-
-            except Exception:
-                continue
-
-        print(
-            f"Svarah provided "
-            f"{count_en_real} samples."
-        )
-
-    except Exception as e:
-
-        print(
-            f"Svarah note: {e}"
-        )
-
-
-    # ------------------------------------------------------------
-    # 1A FALLBACK. Common Voice Indian Accent
-    # ------------------------------------------------------------
-
-    if count_en_real < half_bucket:
+        if max_scan is not None and scanned > max_scan:
+            break
 
         try:
+            if not predicate(item):
+                continue
 
-            remaining = (
-                half_bucket
-                - count_en_real
+            audio, sr = get_audio_from_item(item)
+
+            index = start + downloaded
+
+            speaker = f"{speaker_prefix}_{downloaded % 20}"
+
+            path = output_path(
+                bucket,
+                speaker,
+                index,
             )
 
-            print(
-                f"Trying Common Voice "
-                f"for {remaining} more..."
+            save_audio(
+                (audio, sr),
+                path,
             )
 
-            ds_cv = load_dataset(
-                "ishands/commonvoice-indian_accent",
-                split="train",
-                streaming=True,
-            )
+            downloaded += 1
 
-            scanned = 0
+            if downloaded % 25 == 0 or downloaded == remaining:
+                print(
+                    f"  {label}: "
+                    f"{downloaded}/{remaining} "
+                    f"(scanned {scanned})"
+                )
 
-            max_scan = max(
-                remaining * 20,
-                200,
-            )
-
-            for item in tqdm(
-                ds_cv,
-                total=max_scan,
-                desc="CV Indic-EN",
-            ):
-
-                if count_en_real >= half_bucket:
-                    break
-
-                if scanned >= max_scan:
-
-                    print(
-                        f"\nStopped Common Voice "
-                        f"after scanning "
-                        f"{scanned} samples."
-                    )
-
-                    break
-
-                scanned += 1
-
-                try:
-
-                    data, sr = (
-                        get_audio_from_item(item)
-                    )
-
-                    if data is None:
-                        continue
-
-                    speaker = item.get(
-                        "client_id",
-                        f"cv_en_{count_en_real % 20}",
-                    )
-
-                    spk = str(
-                        speaker
-                    )[:30]
-
-                    if write_audio(
-                        data,
-                        sr,
-                        "bonafide",
-                        "en",
-                        spk,
-                        count_en_real,
-                    ):
-
-                        count_en_real += 1
-
-                except Exception:
-                    continue
-
-            print(
-                f"Common Voice collected "
-                f"{count_en_real} "
-                f"Indian-English samples."
-            )
-
-        except Exception as e:
-
-            print(
-                f"CommonVoice note: {e}"
-            )
-
-
-    # ------------------------------------------------------------
-    # 1B. Western Real English
-    # Gary Stafford
-    # Label 0 = bona fide
-    # ------------------------------------------------------------
-
-    west_real_count = 0
-
-    try:
-
-        print(
-            "\nFetching Western real-English samples..."
-        )
-
-        ds_west_real = load_dataset(
-            "garystafford/deepfake-audio-detection",
-            split="train",
-            streaming=True,
-        )
-
-        target_west_real = (
-            samples_per_bucket
-            - count_en_real
-        )
-
-        for item in tqdm(
-            ds_west_real,
-            total=target_west_real,
-            desc="Real West-EN",
-        ):
-
-            if count_en_real >= samples_per_bucket:
+            if downloaded >= remaining:
                 break
 
-            try:
+        except Exception as exc:
+            print(
+                f"  Warning: skipped sample "
+                f"at scan {scanned}: {exc}"
+            )
 
-                label = item.get(
-                    "label",
-                    1,
+    final_count = count_files(bucket)
+
+    print(
+        f"{label} finished: "
+        f"{final_count}/{target}"
+    )
+
+    return final_count
+
+
+# ============================================================
+# SVARAH
+# ============================================================
+
+def download_svarah_real():
+    """
+    Svarah test split is used as Indian English real.
+
+    IMPORTANT:
+    Svarah's `primary_language` field describes the speaker's
+    primary/native language and should NOT be used to filter
+    English speech here.
+    """
+
+    bucket = "bonafide_en"
+    target = 150
+
+    existing_source = len(
+        list((RAW_DIR / bucket).glob("svarah_*/*.wav"))
+    )
+
+    if existing_source >= target:
+        print(
+            f"Svarah Indian English real already has "
+            f"{existing_source}/{target}"
+        )
+        return
+
+    remaining = target - existing_source
+
+    print()
+    print("=" * 65)
+    print(
+        f"Downloading Svarah Indian English REAL: "
+        f"{remaining} files"
+    )
+    print("=" * 65)
+
+    ds = load_streaming(
+        SVARAH_DATASET,
+        SVARAH_SPLIT,
+    )
+
+    downloaded = 0
+
+    for item in ds:
+
+        if downloaded >= remaining:
+            break
+
+        try:
+            audio, sr = get_audio_from_item(item)
+
+            speaker = f"svarah_{downloaded % 20}"
+
+            # Global index inside bonafide_en.
+            index = next_index(bucket)
+
+            path = output_path(
+                bucket,
+                speaker,
+                index,
+            )
+
+            save_audio(
+                (audio, sr),
+                path,
+            )
+
+            downloaded += 1
+
+            if downloaded % 25 == 0 or downloaded == remaining:
+                print(
+                    f"  Svarah: "
+                    f"{downloaded}/{remaining}"
                 )
 
-                if label != 0:
-                    continue
+        except Exception as exc:
+            print(
+                f"  Warning: skipped Svarah sample: {exc}"
+            )
 
-                data, sr = (
-                    get_audio_from_item(item)
-                )
+    print(
+        f"Svarah finished. "
+        f"Indian English real source: {downloaded}/{remaining}"
+    )
 
-                if data is None:
-                    continue
 
-                spk = (
-                    f"west_real_"
-                    f"{west_real_count % 15}"
-                )
+# ============================================================
+# GARY
+# ============================================================
 
-                if write_audio(
-                    data,
-                    sr,
+def gary_label(item):
+    """
+    Extract Gary dataset label.
+
+    Expected:
+        0 = real
+        1 = fake
+    """
+
+    for key in ("label", "labels", "is_fake"):
+        if key in item:
+            value = item[key]
+
+            if isinstance(value, str):
+                value_lower = value.lower()
+
+                if value_lower in (
+                    "real",
                     "bonafide",
-                    "en",
-                    spk,
-                    count_en_real,
+                    "bona_fide",
+                    "0",
                 ):
+                    return 0
 
-                    count_en_real += 1
-                    west_real_count += 1
-
-            except Exception:
-                continue
-
-    except Exception as e:
-
-        print(
-            f"Error fetching "
-            f"Real Western English: {e}"
-        )
-
-
-    # ============================================================
-    # 2. FAKE ENGLISH
-    # spoof_en
-    # Label = 1
-    #
-    # 50% Indian synthetic English
-    # 50% Western synthetic English
-    # ============================================================
-
-    print(
-        "\n2. Fetching Fake English "
-        "(50% Indian Clones + 50% Western Clones)..."
-    )
-
-    count_en_fake = 0
-
-
-    # ------------------------------------------------------------
-    # 2A. Indian Synthetic English
-    # IndicTTS Deepfake Challenge
-    # ------------------------------------------------------------
-
-    try:
-
-        ds_indic_fake = load_dataset(
-            "SherryT997/IndicTTS-Deepfake-Challenge-Data",
-            split="train",
-            streaming=True,
-        )
-
-        for item in tqdm(
-            ds_indic_fake,
-            total=half_bucket,
-            desc="Spoof Indic-EN",
-        ):
-
-            if count_en_fake >= half_bucket:
-                break
-
-            try:
-
-                lang = str(
-                    item.get(
-                        "language",
-                        "",
-                    )
-                ).lower()
-
-                is_tts = item.get(
-                    "is_tts",
-                    item.get(
-                        "label",
-                        0,
-                    ),
-                )
-
-                if (
-                    "english" in lang
-                    and is_tts == 1
-                ):
-
-                    data, sr = (
-                        get_audio_from_item(item)
-                    )
-
-                    if data is None:
-                        continue
-
-                    spk = (
-                        f"indic_synth_en_"
-                        f"{count_en_fake % 15}"
-                    )
-
-                    if write_audio(
-                        data,
-                        sr,
-                        "spoof",
-                        "en",
-                        spk,
-                        count_en_fake,
-                    ):
-
-                        count_en_fake += 1
-
-            except Exception:
-                continue
-
-    except Exception as e:
-
-        print(
-            f"IndicTTS English note: {e}"
-        )
-
-
-    # ------------------------------------------------------------
-    # IMPORTANT:
-    # We do NOT use the bilingual dataset as fake audio.
-    #
-    # A bilingual dataset is not automatically synthetic.
-    # Therefore it should not be mislabeled as spoof/fake.
-    # ------------------------------------------------------------
-
-
-    # ------------------------------------------------------------
-    # 2B. Western Synthetic English
-    # Gary Stafford
-    # Label 1 = fake
-    # ------------------------------------------------------------
-
-    west_fake_count = 0
-
-    try:
-
-        ds_west_fake = load_dataset(
-            "garystafford/deepfake-audio-detection",
-            split="train",
-            streaming=True,
-        )
-
-        target_west_fake = (
-            samples_per_bucket
-            - count_en_fake
-        )
-
-        for item in tqdm(
-            ds_west_fake,
-            total=target_west_fake,
-            desc="Spoof West-EN",
-        ):
-
-            if count_en_fake >= samples_per_bucket:
-                break
-
-            try:
-
-                label = item.get(
-                    "label",
-                    0,
-                )
-
-                if label != 1:
-                    continue
-
-                data, sr = (
-                    get_audio_from_item(item)
-                )
-
-                if data is None:
-                    continue
-
-                spk = (
-                    f"west_synth_"
-                    f"{west_fake_count % 15}"
-                )
-
-                if write_audio(
-                    data,
-                    sr,
+                if value_lower in (
+                    "fake",
                     "spoof",
-                    "en",
-                    spk,
-                    count_en_fake,
+                    "synthetic",
+                    "1",
                 ):
-
-                    count_en_fake += 1
-                    west_fake_count += 1
-
-            except Exception:
-                continue
-
-    except Exception as e:
-
-        print(
-            f"Error fetching "
-            f"Fake Western English: {e}"
-        )
-
-
-    # ============================================================
-    # 3. REAL HINDI
-    # bonafide_hi
-    # Label = 0
-    # ============================================================
-
-    print(
-        "\n3. Fetching Verified Real Hindi Speech..."
-    )
-
-    count_hi_real = 0
-
-    try:
-
-        ds_indic_hi = load_dataset(
-            "SherryT997/IndicTTS-Deepfake-Challenge-Data",
-            split="train",
-            streaming=True,
-        )
-
-        for item in tqdm(
-            ds_indic_hi,
-            total=samples_per_bucket,
-            desc="Real-HI",
-        ):
-
-            if count_hi_real >= samples_per_bucket:
-                break
+                    return 1
 
             try:
-
-                lang = str(
-                    item.get(
-                        "language",
-                        "",
-                    )
-                ).lower()
-
-                is_tts = item.get(
-                    "is_tts",
-                    item.get(
-                        "label",
-                        0,
-                    ),
-                )
-
-                if (
-                    "hindi" in lang
-                    and is_tts == 0
-                ):
-
-                    data, sr = (
-                        get_audio_from_item(item)
-                    )
-
-                    if data is None:
-                        continue
-
-                    spk = (
-                        f"real_hi_"
-                        f"{count_hi_real % 20}"
-                    )
-
-                    if write_audio(
-                        data,
-                        sr,
-                        "bonafide",
-                        "hi",
-                        spk,
-                        count_hi_real,
-                    ):
-
-                        count_hi_real += 1
-
+                return int(value)
             except Exception:
-                continue
+                pass
 
-    except Exception as e:
-
-        print(
-            f"Error fetching Real Hindi: {e}"
-        )
+    return None
 
 
-    # ============================================================
-    # 4. FAKE HINDI
-    # spoof_hi
-    # Label = 1
-    # ============================================================
+def download_gary_real():
+    bucket = "bonafide_en"
+    target = 150
 
-    print(
-        "\n4. Fetching Diverse Synthetic Hindi Speech..."
+    existing_source = len(
+        list((RAW_DIR / bucket).glob("west_real_*/*.wav"))
     )
 
-    count_hi_fake = 0
+    if existing_source >= target:
+        print(
+            f"Gary foreign English REAL already has "
+            f"{existing_source}/{target}"
+        )
+        return
+
+    remaining = target - existing_source
+
+    print()
+    print("-" * 65)
+    print(
+        f"Downloading foreign English REAL from Gary: "
+        f"{remaining} files"
+    )
+    print("-" * 65)
+
+    ds = load_streaming(
+        GARY_DATASET,
+        GARY_SPLIT,
+    )
+
+    downloaded = 0
+    scanned = 0
+
+    for item in ds:
+
+        scanned += 1
+
+        if downloaded >= remaining:
+            break
+
+        try:
+            if gary_label(item) != 0:
+                continue
+
+            audio, sr = get_audio_from_item(item)
+
+            speaker = f"west_real_{downloaded % 15}"
+
+            index = next_index(bucket)
+
+            path = output_path(
+                bucket,
+                speaker,
+                index,
+            )
+
+            save_audio(
+                (audio, sr),
+                path,
+            )
+
+            downloaded += 1
+
+            if downloaded % 25 == 0 or downloaded == remaining:
+                print(
+                    f"  Gary real: "
+                    f"{downloaded}/{remaining}"
+                )
+
+        except Exception as exc:
+            print(
+                f"  Warning: skipped Gary real sample "
+                f"at scan {scanned}: {exc}"
+            )
+
+    print(
+        f"Gary real finished: "
+        f"{downloaded}/{remaining}"
+    )
+
+
+def download_gary_fake():
+    bucket = "spoof_en"
+    target = 150
+
+    existing_source = len(
+        list((RAW_DIR / bucket).glob("west_synth_*/*.wav"))
+    )
+
+    if existing_source >= target:
+        print(
+            f"Gary foreign English FAKE already has "
+            f"{existing_source}/{target}"
+        )
+        return
+
+    remaining = target - existing_source
+
+    print()
+    print("-" * 65)
+    print(
+        f"Downloading foreign English FAKE from Gary: "
+        f"{remaining} files"
+    )
+    print("-" * 65)
+
+    ds = load_streaming(
+        GARY_DATASET,
+        GARY_SPLIT,
+    )
+
+    downloaded = 0
+    scanned = 0
+
+    for item in ds:
+
+        scanned += 1
+
+        if downloaded >= remaining:
+            break
+
+        try:
+            if gary_label(item) != 1:
+                continue
+
+            audio, sr = get_audio_from_item(item)
+
+            speaker = f"west_synth_{downloaded % 15}"
+
+            index = next_index(bucket)
+
+            path = output_path(
+                bucket,
+                speaker,
+                index,
+            )
+
+            save_audio(
+                (audio, sr),
+                path,
+            )
+
+            downloaded += 1
+
+            if downloaded % 25 == 0 or downloaded == remaining:
+                print(
+                    f"  Gary fake: "
+                    f"{downloaded}/{remaining}"
+                )
+
+        except Exception as exc:
+            print(
+                f"  Warning: skipped Gary fake sample "
+                f"at scan {scanned}: {exc}"
+            )
+
+    print(
+        f"Gary fake finished: "
+        f"{downloaded}/{remaining}"
+    )
+
+
+# ============================================================
+# INDICTTS
+# ============================================================
+
+def indictts_language(item):
+    value = item.get("language")
+
+    if value is None:
+        return ""
+
+    return str(value).strip().lower()
+
+
+def indictts_is_fake(item):
+    """
+    IndicTTS:
+        is_tts = 1 -> synthetic/fake
+        is_tts = 0 -> real
+    """
+
+    value = item.get("is_tts")
 
     try:
+        return int(value) == 1
+    except Exception:
+        return False
 
-        ds_indic_fake_hi = load_dataset(
-            "SherryT997/IndicTTS-Deepfake-Challenge-Data",
-            split="train",
-            streaming=True,
+
+def indictts_is_real(item):
+    value = item.get("is_tts")
+
+    try:
+        return int(value) == 0
+    except Exception:
+        return False
+
+
+def download_indictts_all():
+    """
+    Scan IndicTTS exactly ONCE.
+
+    The dataset is ordered roughly by language, so Tamil appears
+    near the end. A single scan avoids repeatedly resolving and
+    scanning all 35 parquet files.
+    """
+
+    targets = {
+        "english_fake": 150,
+        "hindi_real": 300,
+        "hindi_fake": 300,
+        "tamil_fake": 300,
+    }
+
+    buckets = {
+        "english_fake": "spoof_en",
+        "hindi_real": "bonafide_hi",
+        "hindi_fake": "spoof_hi",
+        "tamil_fake": "spoof_ta",
+    }
+
+    speakers = {
+        "english_fake": "indic_synth_en",
+        "hindi_real": "real_hi",
+        "hindi_fake": "synth_hi",
+        "tamil_fake": "synth_ta",
+    }
+
+    # --------------------------------------------------------
+    # Check what is still required.
+    # --------------------------------------------------------
+
+    remaining = {}
+
+    for key, target in targets.items():
+
+        bucket = buckets[key]
+
+        existing_source = len(
+            list(
+                (RAW_DIR / bucket).glob(
+                    f"{speakers[key]}_*/*.wav"
+                )
+            )
         )
 
-        for item in tqdm(
-            ds_indic_fake_hi,
-            total=samples_per_bucket,
-            desc="Spoof-HI",
-        ):
+        remaining[key] = max(
+            0,
+            target - existing_source,
+        )
 
-            if count_hi_fake >= samples_per_bucket:
+    print()
+    print("=" * 65)
+    print("INDICTTS DOWNLOAD PLAN")
+    print("=" * 65)
+
+    for key in targets:
+        print(
+            f"{key:<18}: "
+            f"{targets[key] - remaining[key]}/"
+            f"{targets[key]}"
+            f"  remaining={remaining[key]}"
+        )
+
+    # Nothing needed from IndicTTS.
+    if not any(value > 0 for value in remaining.values()):
+        print()
+        print("All IndicTTS targets already complete.")
+        return
+
+    print()
+    print("Loading IndicTTS once...")
+    print()
+
+    ds = load_streaming(
+        INDICTTS_DATASET,
+        INDICTTS_SPLIT,
+    )
+
+    print("IndicTTS stream ready.")
+    print("Scanning once for all required categories...")
+
+    counts = {
+        key: 0
+        for key in targets
+    }
+
+    scanned = 0
+
+    # --------------------------------------------------------
+    # Scan
+    # --------------------------------------------------------
+
+    for item in ds:
+
+        scanned += 1
+
+        # ----------------------------------------------------
+        # Stop as soon as every required source target is full.
+        # ----------------------------------------------------
+
+        all_done = True
+
+        for key in targets:
+            if counts[key] < remaining[key]:
+                all_done = False
                 break
 
+        if all_done:
+            break
+
+        language = indictts_language(item)
+
+        # ----------------------------------------------------
+        # English fake
+        # ----------------------------------------------------
+
+        if (
+            language == "english"
+            and indictts_is_fake(item)
+            and counts["english_fake"]
+            < remaining["english_fake"]
+        ):
+            key = "english_fake"
+            bucket = buckets[key]
+
             try:
+                audio, sr = get_audio_from_item(item)
 
-                lang = str(
-                    item.get(
-                        "language",
-                        "",
-                    )
-                ).lower()
+                index = next_index(bucket)
 
-                is_tts = item.get(
-                    "is_tts",
-                    item.get(
-                        "label",
-                        1,
-                    ),
+                speaker = (
+                    f"{speakers[key]}_"
+                    f"{counts[key] % 15}"
                 )
 
-                if (
-                    "hindi" in lang
-                    and is_tts == 1
-                ):
+                path = output_path(
+                    bucket,
+                    speaker,
+                    index,
+                )
 
-                    data, sr = (
-                        get_audio_from_item(item)
+                save_audio(
+                    (audio, sr),
+                    path,
+                )
+
+                counts[key] += 1
+
+                if counts[key] % 25 == 0:
+                    print(
+                        f"  English fake: "
+                        f"{counts[key]}/"
+                        f"{remaining[key]} "
+                        f"(scanned {scanned})"
                     )
 
-                    if data is None:
-                        continue
+            except Exception as exc:
+                print(
+                    f"  Warning: skipped English fake "
+                    f"at row {scanned}: {exc}"
+                )
 
-                    spk = (
-                        f"synth_hi_"
-                        f"{count_hi_fake % 20}"
+        # ----------------------------------------------------
+        # Hindi real
+        # ----------------------------------------------------
+
+        elif (
+            language == "hindi"
+            and indictts_is_real(item)
+            and counts["hindi_real"]
+            < remaining["hindi_real"]
+        ):
+            key = "hindi_real"
+            bucket = buckets[key]
+
+            try:
+                audio, sr = get_audio_from_item(item)
+
+                index = next_index(bucket)
+
+                speaker = (
+                    f"{speakers[key]}_"
+                    f"{counts[key] % 20}"
+                )
+
+                path = output_path(
+                    bucket,
+                    speaker,
+                    index,
+                )
+
+                save_audio(
+                    (audio, sr),
+                    path,
+                )
+
+                counts[key] += 1
+
+                if counts[key] % 25 == 0:
+                    print(
+                        f"  Hindi real: "
+                        f"{counts[key]}/"
+                        f"{remaining[key]} "
+                        f"(scanned {scanned})"
                     )
 
-                    if write_audio(
-                        data,
-                        sr,
-                        "spoof",
-                        "hi",
-                        spk,
-                        count_hi_fake,
-                    ):
+            except Exception as exc:
+                print(
+                    f"  Warning: skipped Hindi real "
+                    f"at row {scanned}: {exc}"
+                )
 
-                        count_hi_fake += 1
+        # ----------------------------------------------------
+        # Hindi fake
+        # ----------------------------------------------------
 
-            except Exception:
-                continue
+        elif (
+            language == "hindi"
+            and indictts_is_fake(item)
+            and counts["hindi_fake"]
+            < remaining["hindi_fake"]
+        ):
+            key = "hindi_fake"
+            bucket = buckets[key]
 
-    except Exception as e:
+            try:
+                audio, sr = get_audio_from_item(item)
 
+                index = next_index(bucket)
+
+                speaker = (
+                    f"{speakers[key]}_"
+                    f"{counts[key] % 20}"
+                )
+
+                path = output_path(
+                    bucket,
+                    speaker,
+                    index,
+                )
+
+                save_audio(
+                    (audio, sr),
+                    path,
+                )
+
+                counts[key] += 1
+
+                if counts[key] % 25 == 0:
+                    print(
+                        f"  Hindi fake: "
+                        f"{counts[key]}/"
+                        f"{remaining[key]} "
+                        f"(scanned {scanned})"
+                    )
+
+            except Exception as exc:
+                print(
+                    f"  Warning: skipped Hindi fake "
+                    f"at row {scanned}: {exc}"
+                )
+
+        # ----------------------------------------------------
+        # Tamil fake
+        # ----------------------------------------------------
+
+        elif (
+            language == "tamil"
+            and indictts_is_fake(item)
+            and counts["tamil_fake"]
+            < remaining["tamil_fake"]
+        ):
+            key = "tamil_fake"
+            bucket = buckets[key]
+
+            try:
+                audio, sr = get_audio_from_item(item)
+
+                index = next_index(bucket)
+
+                speaker = (
+                    f"{speakers[key]}_"
+                    f"{counts[key] % 20}"
+                )
+
+                path = output_path(
+                    bucket,
+                    speaker,
+                    index,
+                )
+
+                save_audio(
+                    (audio, sr),
+                    path,
+                )
+
+                counts[key] += 1
+
+                if counts[key] % 25 == 0:
+                    print(
+                        f"  Tamil fake: "
+                        f"{counts[key]}/"
+                        f"{remaining[key]} "
+                        f"(scanned {scanned})"
+                    )
+
+            except Exception as exc:
+                print(
+                    f"  Warning: skipped Tamil fake "
+                    f"at row {scanned}: {exc}"
+                )
+
+        # ----------------------------------------------------
+        # Progress every 1,000 rows.
+        # ----------------------------------------------------
+
+        if scanned % 1000 == 0:
+            status = " | ".join(
+                f"{key}={counts[key]}/{remaining[key]}"
+                for key in targets
+            )
+
+            print(
+                f"  Scanned {scanned:,} rows | {status}"
+            )
+
+    print()
+    print("IndicTTS scan finished.")
+    print(f"Total rows scanned: {scanned:,}")
+
+    for key in targets:
         print(
-            f"Error fetching Fake Hindi: {e}"
+            f"  {key}: "
+            f"{counts[key]}/{remaining[key]}"
         )
 
 
-    # ============================================================
-    # FINAL SUMMARY
-    # ============================================================
+# ============================================================
+# INDICVOICES - TAMIL REAL
+# ============================================================
 
+def download_tamil_real():
+    """
+    Download Tamil real samples from IndicVoices.
+
+    IMPORTANT:
+    The currently available IndicVoices configuration is:
+
+        tamil
+
+    and the split available for this configuration is:
+
+        train
+        valid
+
+    There is NO test split, so we use `valid`.
+    """
+
+    bucket = "bonafide_ta"
+    target = 300
+
+    existing = count_files(bucket)
+
+    if existing >= target:
+        print()
+        print(
+            f"Tamil real already complete: "
+            f"{existing}/{target}"
+        )
+        return
+
+    remaining = target - existing
+
+    print()
+    print("-" * 65)
     print(
-        "\n================================================================="
+        f"Downloading Tamil REAL from IndicVoices: "
+        f"{remaining} files"
+    )
+    print("-" * 65)
+
+    print("Dataset :", INDICVOICES_DATASET)
+    print("Config  :", INDICVOICES_CONFIG)
+    print("Split   :", INDICVOICES_SPLIT)
+
+    # --------------------------------------------------------
+    # Correct configuration and split.
+    # --------------------------------------------------------
+
+    ds = load_streaming(
+        INDICVOICES_DATASET,
+        INDICVOICES_SPLIT,
+        config=INDICVOICES_CONFIG,
     )
 
-    print(
-        "Balanced dataset ingestion complete."
-    )
+    downloaded = 0
+    scanned = 0
+
+    for item in ds:
+
+        scanned += 1
+
+        if downloaded >= remaining:
+            break
+
+        try:
+            audio, sr = get_audio_from_item(item)
+
+            speaker = (
+                f"indicvoices_ta_"
+                f"{downloaded % 20}"
+            )
+
+            index = next_index(bucket)
+
+            path = output_path(
+                bucket,
+                speaker,
+                index,
+            )
+
+            save_audio(
+                (audio, sr),
+                path,
+            )
+
+            downloaded += 1
+
+            if downloaded % 25 == 0 or downloaded == remaining:
+                print(
+                    f"  Tamil real: "
+                    f"{downloaded}/{remaining} "
+                    f"(scanned {scanned})"
+                )
+
+        except Exception as exc:
+            print(
+                f"  Warning: skipped Tamil real "
+                f"at scan {scanned}: {exc}"
+            )
+
+    final_count = count_files(bucket)
 
     print(
-        f"Real English : {count_en_real}/{samples_per_bucket}"
+        f"Tamil real finished: "
+        f"{final_count}/{target}"
     )
 
+
+# ============================================================
+# VALIDATION
+# ============================================================
+
+def print_status():
+    print()
+    print("=" * 70)
+    print("DATASET STATUS")
+    print("=" * 70)
+
+    total = 0
+
+    for bucket, target in TARGETS.items():
+
+        count = count_files(bucket)
+        total += count
+
+        status = "OK" if count == target else "INCOMPLETE"
+
+        print(
+            f"{bucket:<18} "
+            f"{count:>3}/{target:<3} "
+            f"{status}"
+        )
+
+    print("-" * 70)
     print(
-        f"Fake English : {count_en_fake}/{samples_per_bucket}"
+        f"{'TOTAL':<18} "
+        f"{total:>3}/{TOTAL_TARGET}"
     )
+    print("=" * 70)
 
+
+def validate_final_dataset():
+    print()
+    print("=" * 70)
+    print("FINAL VALIDATION")
+    print("=" * 70)
+
+    success = True
+
+    for bucket, target in TARGETS.items():
+
+        count = count_files(bucket)
+
+        if count != target:
+            success = False
+
+        print(
+            f"{bucket:<18}: "
+            f"{count}/{target}"
+        )
+
+    total = total_files()
+
+    print("-" * 70)
     print(
-        f"Real Hindi   : {count_hi_real}/{samples_per_bucket}"
+        f"TOTAL              : "
+        f"{total}/{TOTAL_TARGET}"
     )
 
-    print(
-        f"Fake Hindi   : {count_hi_fake}/{samples_per_bucket}"
-    )
+    if success and total == TOTAL_TARGET:
+        print()
+        print("SUCCESS")
+        print("All six buckets contain exactly 300 WAV files.")
+        print("Total dataset size: 1,800 WAV files.")
+    else:
+        print()
+        print("DATASET INCOMPLETE")
+        print("Run the downloader again to resume missing files.")
 
-    print(
-        "================================================================="
-    )
+    print("=" * 70)
 
-    print(
-        "\nSamples stored in data/raw/"
-    )
+    return success
 
 
-# ================================================================
-# ENTRY POINT
-# ================================================================
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    ensure_directories()
+
+    print("=" * 70)
+    print("VERIVOX DATASET DOWNLOADER")
+    print("=" * 70)
+
+    print()
+    print("Target composition:")
+    print()
+    print("bonafide_en")
+    print("    150 Indian English REAL  (Svarah)")
+    print("    150 Foreign English REAL (Gary)")
+    print()
+    print("spoof_en")
+    print("    150 Indian English FAKE  (IndicTTS)")
+    print("    150 Foreign English FAKE (Gary)")
+    print()
+    print("bonafide_hi")
+    print("    300 Hindi REAL            (IndicTTS)")
+    print()
+    print("spoof_hi")
+    print("    300 Hindi FAKE            (IndicTTS)")
+    print()
+    print("bonafide_ta")
+    print("    300 Tamil REAL            (IndicVoices valid)")
+    print()
+    print("spoof_ta")
+    print("    300 Tamil FAKE            (IndicTTS)")
+    print()
+    print("TOTAL = 1,800 files")
+    print()
+
+    print_status()
+
+    # ========================================================
+    # 1. INDIAN ENGLISH REAL
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("1/6 — INDIAN ENGLISH REAL")
+    print("=" * 70)
+
+    download_svarah_real()
+
+    # ========================================================
+    # 2. FOREIGN ENGLISH REAL
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("2/6 — FOREIGN ENGLISH REAL")
+    print("=" * 70)
+
+    download_gary_real()
+
+    # ========================================================
+    # 3. INDIC TTS
+    # ========================================================
+    #
+    # CRITICAL:
+    # IndicTTS is loaded and scanned ONCE.
+    #
+    # This prevents the old behavior where the 35 parquet files
+    # were repeatedly resolved/scanned for each category.
+    #
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("3/6 — INDICTTS")
+    print("=" * 70)
+
+    download_indictts_all()
+
+    # ========================================================
+    # 4. FOREIGN ENGLISH FAKE
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("4/6 — FOREIGN ENGLISH FAKE")
+    print("=" * 70)
+
+    download_gary_fake()
+
+    # ========================================================
+    # 5. TAMIL REAL
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("5/6 — TAMIL REAL")
+    print("=" * 70)
+
+    download_tamil_real()
+
+    # ========================================================
+    # 6. FINAL STATUS
+    # ========================================================
+
+    print()
+    print("=" * 70)
+    print("6/6 — FINAL VALIDATION")
+    print("=" * 70)
+
+    validate_final_dataset()
+
 
 if __name__ == "__main__":
-
-    download_dataset(
-        samples_per_bucket=150
-    )
+    main()

@@ -6,10 +6,13 @@ import joblib
 import numpy as np
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
+from src.adversarial.router import router as adversarial_router
 from src.config import VAD_FRAME_SAMPLES
 from src.features import extract_features
+from src.yin_analyzer import extract_yin_pitch_stats
 from src.risk_engine.schemas import ModelPrediction
 from src.risk_engine.stream_manager import StreamManager
 from src.vad import VoiceActivityDetector
@@ -27,6 +30,21 @@ from src.speaker_verifier import SpeakerVerifier
 
 
 app = FastAPI()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(adversarial_router)
+
 
 
 # ============================================================================
@@ -926,6 +944,12 @@ async def audio_websocket_endpoint(
 
                         continue
 
+                    yin_analysis = await asyncio.to_thread(
+                        extract_yin_pitch_stats,
+                        audio_window,
+                        sr=SAMPLE_RATE,
+                    )
+
                     # --------------------------------------------------------
                     # SLA
                     # --------------------------------------------------------
@@ -1125,6 +1149,9 @@ async def audio_websocket_endpoint(
                                 shap_result.get(
                                     "vocoder_flag"
                                 )
+                            ),
+                            "yin_analysis": (
+                                yin_analysis
                             ),
                             "diagnostic_cues": (
                                 shap_result.get(

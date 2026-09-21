@@ -32,7 +32,7 @@ import {
 } from 'lucide-react'
 
 import AdversarialRobustness from './components/AdversarialRobustness'
-import SimulationTelemetry from './components/SimulationTelemetry'
+import AudioPlaybackBar from './components/AudioPlaybackBar'
 
 
 /* =========================================================
@@ -172,6 +172,12 @@ function getAnalyticsData(selected = {}) {
           : [],
     },
 
+    yin_analysis:
+      selected.yin_analysis &&
+      typeof selected.yin_analysis === "object"
+        ? selected.yin_analysis
+        : null,
+
     feature_latency_ms:
       selected.latency_ms ?? null,
 
@@ -224,8 +230,14 @@ export default function App() {
   const [micLevel, setMicLevel] =
     useState(0)
 
-  const [showInspector, setShowInspector] =
+    const [showInspector, setShowInspector] =
     useState(false)
+
+  // --- Added by Garima (Sprint 1): live mic monitor toggle ---
+  const [isLiveMonitoring, setIsLiveMonitoring] =
+    useState(false)
+
+  const monitorGainRef = useRef(null)
 
   const wsRef = useRef(null)
 
@@ -796,6 +808,27 @@ export default function App() {
           audioCtx.destination
         )
 
+        // --- Added by Garima (Sprint 1): live mic monitor ---
+        // Separate gain node, tapped directly off the mic source (not
+        // the processor), so muting/unmuting has zero effect on the
+        // PCM16 stream sent to the backend.
+        const monitorGain =
+          audioCtx.createGain()
+
+        // Starts muted — user opts in via the Playback Bar toggle.
+        // NOTE: if listening over speakers (not headphones), this can
+        // cause feedback/echo since it's raw, unprocessed mic input.
+        monitorGain.gain.value = 0
+
+        source.connect(monitorGain)
+
+        monitorGain.connect(
+          audioCtx.destination
+        )
+
+        monitorGainRef.current =
+          monitorGain
+
         if (
           audioCtx.state ===
           'suspended'
@@ -840,6 +873,19 @@ export default function App() {
         sourceRef.current =
           null
       }
+
+      // --- Added by Garima (Sprint 1): clean up live monitor ---
+      if (
+        monitorGainRef.current
+      ) {
+        monitorGainRef.current
+          .disconnect()
+
+        monitorGainRef.current =
+          null
+      }
+
+      setIsLiveMonitoring(false)
 
       if (
         mediaStreamRef.current
@@ -887,10 +933,19 @@ export default function App() {
     }
 
 
+  // --- Added by Garima (Sprint 1): toggle live mic monitor ---
+  const toggleLiveMonitor = () => {
+    if (!monitorGainRef.current) return
+
+    const next = !isLiveMonitoring
+    monitorGainRef.current.gain.value = next ? 1 : 0
+    setIsLiveMonitoring(next)
+  }
+
+
   /* =========================================================
      AUDIO FILE STREAMING
      ========================================================= */
-
   const handleFileUpload =
     async (event) => {
       const file =
@@ -2081,6 +2136,19 @@ export default function App() {
 
               </div>
 
+              {/* --- Added by Garima (Sprint 1): Live Mic Playback Bar --- */}
+              {inputMode === 'mic' &&
+                micStatus === 'Live Mic Streaming...' && (
+                  <div className="mt-4">
+                    <AudioPlaybackBar
+                      label="Live Mic Monitor"
+                      isPlaying={isLiveMonitoring}
+                      level={micLevel}
+                      onToggle={toggleLiveMonitor}
+                    />
+                  </div>
+                )}
+
             </section>
 
 
@@ -2473,16 +2541,7 @@ export default function App() {
                 </div>
 
 
-                {/* SIMULATION */}
 
-                <SimulationTelemetry
-                  activeStreamId={
-                    activeStreamId
-                  }
-                  onResultReceived={
-                    handleLiveAudioResult
-                  }
-                />
 
 
                 {/* JSON CONTRACT */}
@@ -2527,21 +2586,9 @@ export default function App() {
 
         {activePage === 'adversarial' && (
           <div className="space-y-8 max-w-6xl mx-auto">
-
-            {/*
-             * This section is intentionally allowed
-             * to contain hardcoded benchmark/demo values.
-             */}
             <AdversarialRobustness />
 
-            <SimulationTelemetry
-              activeStreamId={
-                activeStreamId
-              }
-              onResultReceived={
-                handleLiveAudioResult
-              }
-            />
+
 
           </div>
         )}
@@ -2869,6 +2916,51 @@ export default function App() {
                         ?.artifact_signature ??
                         '--'}
                     </span>
+
+                  </div>
+
+                  <div className="border-t border-slate-800 pt-3">
+
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+                      YIN Pitch Analysis
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3 text-[11px] font-mono">
+
+                      <div>
+                        <div className="text-slate-500">
+                          F0 Mean
+                        </div>
+                        <div className="text-slate-200 font-bold">
+                          {selected.yin_analysis?.f0_mean != null
+                            ? `${Number(selected.yin_analysis.f0_mean).toFixed(2)} Hz`
+                            : '--'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-slate-500">
+                          F0 Std Dev
+                        </div>
+                        <div className="text-slate-200 font-bold">
+                          {selected.yin_analysis?.f0_std != null
+                            ? `${Number(selected.yin_analysis.f0_std).toFixed(2)} Hz`
+                            : '--'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-slate-500">
+                          Voiced Ratio
+                        </div>
+                        <div className="text-slate-200 font-bold">
+                          {selected.yin_analysis?.voiced_ratio != null
+                            ? `${(Number(selected.yin_analysis.voiced_ratio) * 100).toFixed(1)}%`
+                            : '--'}
+                        </div>
+                      </div>
+
+                    </div>
 
                   </div>
 
