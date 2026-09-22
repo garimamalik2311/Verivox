@@ -49,6 +49,11 @@ class RiskResult(BaseModel):
     dispatch_results: list[dict] = Field(default_factory=list)
     privacy_mode: str = "feature_only"
 
+    # --- Scenario / transaction context ---
+    transaction_amount_inr: float | None = None
+    scenario_source: str = "default"
+    response_workflow_status: str = "INACTIVE"
+
     model_version: str
 
     # --- Added by Person A (Sprint 1B: Features 1, 2, 3, 4) ---

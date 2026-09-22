@@ -18,6 +18,8 @@ class DispatchResult:
     attempted: bool
     delivered: bool
     detail: str
+    provider_message_id: str | None = None
+    provider_status: str | None = None
 
 
 class Dispatcher(Protocol):

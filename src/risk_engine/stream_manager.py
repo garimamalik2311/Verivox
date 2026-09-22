@@ -1,40 +1,56 @@
 from src.risk_engine.engine import RiskEngine
 from src.risk_engine.schemas import ModelPrediction, RiskResult
-from src.risk_engine.notification_engine import (
-    POLICIES,
-    Scenario,
+from src.risk_engine.scenario_resolver import (
+    ScenarioResolution,
+    resolve_scenario,
 )
 
 
 class StreamManager:
-    """Maintains an independent RiskEngine for each active stream."""
+    """Maintains an independent RiskEngine and policy context per stream."""
 
     def __init__(self):
         self._engines: dict[str, RiskEngine] = {}
-        self._scenarios: dict[str, Scenario] = {}
+        self._scenarios: dict[str, str] = {}
+        self._scenario_sources: dict[str, str] = {}
+        self._transaction_amounts: dict[str, float | None] = {}
 
     def configure_stream(
         self,
         stream_id: str,
         scenario: str = "routine_support",
-    ) -> None:
-        """Create the stream RiskEngine using its scenario policy."""
+        transaction_amount_inr: float | None = None,
+    ) -> ScenarioResolution:
+        """Create the stream RiskEngine using its resolved scenario policy."""
 
-        try:
-            selected = Scenario(scenario)
-        except ValueError:
-            selected = Scenario.ROUTINE_SUPPORT
+        resolution = resolve_scenario(
+            requested_scenario=scenario,
+            transaction_amount_inr=transaction_amount_inr,
+        )
+
+        selected = resolution.scenario
 
         if stream_id in self._engines:
-            existing = self._scenarios[stream_id]
+            existing_scenario = self._scenarios[stream_id]
+            existing_amount = self._transaction_amounts[
+                stream_id
+            ]
 
-            if existing != selected:
+            if existing_scenario != selected.value:
                 raise ValueError(
                     f"stream {stream_id!r} is already configured "
-                    f"for scenario {existing.value!r}"
+                    f"for scenario {existing_scenario!r}"
                 )
 
-            return
+            if existing_amount != resolution.transaction_amount_inr:
+                raise ValueError(
+                    f"stream {stream_id!r} already has a different "
+                    "transaction context"
+                )
+
+            return resolution
+
+        from src.risk_engine.notification_engine import POLICIES
 
         policy = POLICIES[selected]
 
@@ -44,7 +60,14 @@ class StreamManager:
                 policy.required_consecutive_flags
             ),
         )
-        self._scenarios[stream_id] = selected
+
+        self._scenarios[stream_id] = selected.value
+        self._scenario_sources[stream_id] = resolution.source
+        self._transaction_amounts[
+            stream_id
+        ] = resolution.transaction_amount_inr
+
+        return resolution
 
     def _get_engine(self, stream_id: str) -> RiskEngine:
         if stream_id not in self._engines:
@@ -57,6 +80,22 @@ class StreamManager:
         engine = self._get_engine(prediction.stream_id)
         return engine.update(prediction)
 
+    def get_context(self, stream_id: str) -> dict:
+        """Return the resolved policy context for a stream."""
+        return {
+            "scenario": self._scenarios.get(
+                stream_id,
+                "routine_support",
+            ),
+            "scenario_source": self._scenario_sources.get(
+                stream_id,
+                "default",
+            ),
+            "transaction_amount_inr": self._transaction_amounts.get(
+                stream_id
+            ),
+        }
+
     def reset_stream(self, stream_id: str) -> None:
         """Reset the risk state for a stream."""
         if stream_id in self._engines:
@@ -66,6 +105,8 @@ class StreamManager:
         """Remove a stream and release its RiskEngine state."""
         self._engines.pop(stream_id, None)
         self._scenarios.pop(stream_id, None)
+        self._scenario_sources.pop(stream_id, None)
+        self._transaction_amounts.pop(stream_id, None)
 
     def active_streams(self) -> list[str]:
         """Return the IDs of currently tracked streams."""

@@ -699,10 +699,19 @@ async def audio_websocket_endpoint(
         websocket
     )
 
-    scenario = websocket.query_params.get(
+    requested_scenario = websocket.query_params.get(
         "scenario",
         "routine_support",
     )
+
+    scenario = requested_scenario
+    transaction_amount_inr = None
+    scenario_source = (
+        "explicit"
+        if websocket.query_params.get("scenario")
+        else "default"
+    )
+    context_configured = False
 
     acquire_stream(stream_id)
 
@@ -762,23 +771,118 @@ async def audio_websocket_endpoint(
                 break
 
             # ----------------------------------------------------------------
-            # Binary audio only
+            # Session context / binary audio
             # ----------------------------------------------------------------
 
-            if "bytes" not in message:
+            if "text" in message and message.get("text") is not None:
+                try:
+                    context = json.loads(message["text"])
+                except json.JSONDecodeError:
+                    await websocket.send_json(
+                        {
+                            "error": "Malformed session context JSON"
+                        }
+                    )
+                    continue
 
-                if message.get("text") is not None:
-
+                if context.get("type") != "session_context":
                     await websocket.send_json(
                         {
                             "error": (
-                                "Expected binary "
-                                "PCM16 audio data"
+                                "Expected session_context JSON "
+                                "or binary PCM16 audio data"
                             )
                         }
                     )
+                    continue
+
+                if context_configured:
+                    await websocket.send_json(
+                        {
+                            "error": (
+                                "Session context is already configured "
+                                "for this stream"
+                            )
+                        }
+                    )
+                    continue
+
+                requested_for_context = context.get(
+                    "scenario",
+                    requested_scenario,
+                )
+
+                raw_amount = context.get(
+                    "transaction_amount_inr"
+                )
+
+                try:
+                    amount = (
+                        float(raw_amount)
+                        if raw_amount is not None
+                        else None
+                    )
+
+                    if amount is not None and amount < 0:
+                        raise ValueError(
+                            "transaction_amount_inr cannot be negative"
+                        )
+
+                    resolution = (
+                        stream_manager.configure_stream(
+                            stream_id,
+                            requested_for_context,
+                            amount,
+                        )
+                    )
+
+                except (ValueError, TypeError) as exc:
+                    await websocket.send_json(
+                        {
+                            "error": str(exc)
+                        }
+                    )
+                    continue
+
+                scenario = resolution.scenario.value
+                scenario_source = resolution.source
+                transaction_amount_inr = (
+                    resolution.transaction_amount_inr
+                )
+                context_configured = True
+
+                await websocket.send_json(
+                    {
+                        "type": "session_context_ack",
+                        "stream_id": stream_id,
+                        "transaction_amount_inr": (
+                            transaction_amount_inr
+                        ),
+                        "scenario": scenario,
+                        "scenario_source": scenario_source,
+                    }
+                )
 
                 continue
+
+            if "bytes" not in message:
+                continue
+
+            # Configure the default/requested context if the client
+            # starts streaming audio without an explicit session_context.
+            if not context_configured:
+                resolution = stream_manager.configure_stream(
+                    stream_id,
+                    requested_scenario,
+                    None,
+                )
+
+                scenario = resolution.scenario.value
+                scenario_source = resolution.source
+                transaction_amount_inr = (
+                    resolution.transaction_amount_inr
+                )
+                context_configured = True
 
             audio_bytes = message["bytes"]
 
@@ -1149,6 +1253,12 @@ async def audio_websocket_endpoint(
                         alert_triggered=result.alert_triggered,
                     )
 
+                    response_workflow_status = (
+                        "TRIGGERED"
+                        if notification.triggered
+                        else "MONITORING"
+                    )
+
                     dispatch_results = []
 
                     if notification.triggered:
@@ -1249,6 +1359,15 @@ async def audio_websocket_endpoint(
                             "notification_message": (
                                 notification.message
                             ),
+                            "transaction_amount_inr": (
+                                transaction_amount_inr
+                            ),
+                            "scenario_source": (
+                                scenario_source
+                            ),
+                            "response_workflow_status": (
+                                response_workflow_status
+                            ),
                             "recommended_actions": (
                                 notification.recommended_actions
                             ),
@@ -1261,6 +1380,12 @@ async def audio_websocket_endpoint(
                                     "attempted": item.attempted,
                                     "delivered": item.delivered,
                                     "detail": item.detail,
+                                    "provider_message_id": (
+                                        item.provider_message_id
+                                    ),
+                                    "provider_status": (
+                                        item.provider_status
+                                    ),
                                 }
                                 for item in dispatch_results
                             ],

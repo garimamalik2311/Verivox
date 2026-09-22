@@ -52,6 +52,7 @@ POLICIES: dict[Scenario, NotificationPolicy] = {
         dispatch_channels=(
             "dashboard",
             "sms",
+            "whatsapp",
             "webhook",
         ),
     ),
@@ -72,6 +73,7 @@ POLICIES: dict[Scenario, NotificationPolicy] = {
         dispatch_channels=(
             "dashboard",
             "sms",
+            "whatsapp",
             "webhook",
         ),
     ),

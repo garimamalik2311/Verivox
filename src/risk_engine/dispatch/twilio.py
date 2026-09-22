@@ -1,3 +1,4 @@
+import json
 import os
 
 import httpx
@@ -25,6 +26,19 @@ class TwilioDispatcher:
         self.auth_token = os.getenv("TWILIO_AUTH_TOKEN")
         self.from_number = os.getenv(from_number_env)
         self.to_number = os.getenv(to_number_env)
+
+        self.status_callback_url = os.getenv(
+            "VERIVOX_TWILIO_STATUS_CALLBACK_URL"
+        )
+        self.whatsapp_content_sid = os.getenv(
+            "VERIVOX_WHATSAPP_CONTENT_SID"
+        )
+        self.whatsapp_content_variables = os.getenv(
+            "VERIVOX_WHATSAPP_CONTENT_VARIABLES"
+        )
+        self.sms_trial_template = os.getenv(
+            "VERIVOX_SMS_TRIAL_TEMPLATE"
+        )
 
     async def dispatch(
         self,
@@ -62,13 +76,42 @@ class TwilioDispatcher:
         body = {
             "From": from_number,
             "To": to_number,
-            "Body": (
+        }
+
+        if self.channel == "whatsapp" and self.whatsapp_content_sid:
+            body["ContentSid"] = self.whatsapp_content_sid
+
+            if self.whatsapp_content_variables:
+                try:
+                    json.loads(self.whatsapp_content_variables)
+                except json.JSONDecodeError:
+                    return DispatchResult(
+                        channel=self.channel,
+                        attempted=False,
+                        delivered=False,
+                        detail=(
+                            "Invalid VERIVOX_WHATSAPP_CONTENT_VARIABLES JSON."
+                        ),
+                    )
+
+                body["ContentVariables"] = (
+                    self.whatsapp_content_variables
+                )
+        elif (
+            self.channel == "sms"
+            and self.sms_trial_template
+        ):
+            body["Body"] = self.sms_trial_template
+        else:
+            body["Body"] = (
                 f"{message.title}\n\n"
                 f"{message.message}\n\n"
                 f"Scenario: {message.scenario}\n"
                 f"Severity: {message.severity}"
-            ),
-        }
+            )
+
+        if self.status_callback_url:
+            body["StatusCallback"] = self.status_callback_url
 
         try:
             async with httpx.AsyncClient(timeout=8.0) as client:
@@ -82,12 +125,61 @@ class TwilioDispatcher:
                 )
 
             response.raise_for_status()
+            payload = response.json()
+
+            provider_status = str(
+                payload.get("status", "accepted")
+            ).lower()
+
+            message_sid = payload.get("sid")
+
+            delivered = provider_status in {
+                "delivered",
+                "read",
+            }
 
             return DispatchResult(
                 channel=self.channel,
                 attempted=True,
-                delivered=True,
-                detail="Twilio accepted the message.",
+                delivered=delivered,
+                detail=(
+                    f"Twilio accepted message "
+                    f"{message_sid or 'without SID'} "
+                    f"with status '{provider_status}'."
+                ),
+                provider_message_id=message_sid,
+                provider_status=provider_status,
+            )
+
+        except httpx.HTTPStatusError as exc:
+            response = exc.response
+
+            try:
+                payload = response.json()
+            except Exception:
+                payload = {}
+
+            code = payload.get("code")
+            message_text = payload.get(
+                "message",
+                response.text[:300],
+            )
+            more_info = payload.get("more_info")
+
+            detail = (
+                f"Twilio API error {code or response.status_code}: "
+                f"{message_text}"
+            )
+
+            if more_info:
+                detail += f" ({more_info})"
+
+            return DispatchResult(
+                channel=self.channel,
+                attempted=True,
+                delivered=False,
+                detail=detail,
+                provider_status="failed",
             )
 
         except Exception as exc:
@@ -96,6 +188,7 @@ class TwilioDispatcher:
                 attempted=True,
                 delivered=False,
                 detail=f"Twilio delivery failed: {exc}",
+                provider_status="failed",
             )
 
 
