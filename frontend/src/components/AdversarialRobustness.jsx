@@ -140,10 +140,10 @@ export default function AdversarialRobustness() {
   return (
     <div className="space-y-6 max-w-5xl mx-auto text-slate-100">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-slate-800 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 border-b border-[var(--color-verivox-border)] pb-5">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
-            <ShieldAlert className="text-cyan-400 size-6" />
+            <ShieldAlert className="text-[var(--color-verivox-cyan)] size-6" />
             Adversarial Attack & Defense Studio
           </h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -151,7 +151,7 @@ export default function AdversarialRobustness() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950/60 text-emerald-400 border border-emerald-500/30">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-[var(--color-verivox-cyan)]/10 text-[var(--color-verivox-cyan)] border border-[var(--color-verivox-cyan)]/30">
             <ShieldCheck className="size-3.5" />
             Active Purifier Shield Ready
           </span>
@@ -159,7 +159,7 @@ export default function AdversarialRobustness() {
       </div>
 
       {/* Control Studio Box */}
-      <div className="rounded-2xl border border-slate-800 bg-[#0d1117] p-6 space-y-6">
+      <div className="rounded-2xl border border-[var(--color-verivox-border)] bg-[var(--color-verivox-dark)] p-6 space-y-6">
         {/* 1. Universal Ingestion Selector */}
         <div>
           <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono block mb-3">
@@ -170,8 +170,8 @@ export default function AdversarialRobustness() {
               onClick={() => setSourceType('dataset')}
               className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition border cursor-pointer ${
                 sourceType === 'dataset'
-                  ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  ? 'bg-[var(--color-verivox-cyan)]/10 border-[var(--color-verivox-cyan)] text-[var(--color-verivox-cyan)] shadow-[0_0_15px_rgba(65,234,212,0.15)]'
+                  : 'bg-[var(--color-verivox-darkest)] border-[var(--color-verivox-border)] text-slate-400 hover:border-slate-700'
               }`}
             >
               <Database size={15} /> Dataset Library
@@ -180,8 +180,8 @@ export default function AdversarialRobustness() {
               onClick={() => setSourceType('upload')}
               className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition border cursor-pointer ${
                 sourceType === 'upload'
-                  ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  ? 'bg-[var(--color-verivox-cyan)]/10 border-[var(--color-verivox-cyan)] text-[var(--color-verivox-cyan)] shadow-[0_0_15px_rgba(65,234,212,0.15)]'
+                  : 'bg-[var(--color-verivox-darkest)] border-[var(--color-verivox-border)] text-slate-400 hover:border-slate-700'
               }`}
             >
               <Upload size={15} /> Upload Audio
@@ -190,22 +190,22 @@ export default function AdversarialRobustness() {
               onClick={() => setSourceType('mic')}
               className={`flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-bold transition border cursor-pointer ${
                 sourceType === 'mic'
-                  ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
-                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                  ? 'bg-[var(--color-verivox-cyan)]/10 border-[var(--color-verivox-cyan)] text-[var(--color-verivox-cyan)] shadow-[0_0_15px_rgba(65,234,212,0.15)]'
+                  : 'bg-[var(--color-verivox-darkest)] border-[var(--color-verivox-border)] text-slate-400 hover:border-slate-700'
               }`}
             >
               <Mic size={15} /> Live Mic Recording
             </button>
           </div>
 
-          <div className="mt-3 p-3.5 bg-black/40 rounded-xl border border-slate-800/80">
+          <div className="mt-3 p-3.5 bg-[var(--color-verivox-darkest)]/40 rounded-xl border border-[var(--color-verivox-border)]/80">
             {sourceType === 'dataset' && (
               <div className="flex items-center gap-3">
                 <span className="text-xs text-slate-400 font-mono">Sample:</span>
                 <select
                   value={selectedDatasetPath}
                   onChange={(e) => setSelectedDatasetPath(e.target.value)}
-                  className="bg-slate-900 border border-slate-700 text-xs rounded-lg px-3 py-1.5 flex-1 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+                  className="bg-[var(--color-verivox-darkest)] border border-[var(--color-verivox-border)] text-xs rounded-lg px-3 py-1.5 flex-1 text-slate-200 focus:outline-none focus:border-[var(--color-verivox-cyan)] font-mono"
                 >
                   {datasetSamples.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -222,7 +222,7 @@ export default function AdversarialRobustness() {
                   type="file"
                   accept="audio/*"
                   onChange={(e) => setUploadedFile(e.target.files[0])}
-                  className="text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 cursor-pointer"
+                  className="text-xs text-slate-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[var(--color-verivox-cyan)]/20 file:text-[var(--color-verivox-cyan)] hover:file:bg-[var(--color-verivox-cyan)]/30 cursor-pointer"
                 />
               </div>
             )}
@@ -232,20 +232,20 @@ export default function AdversarialRobustness() {
                 {!isRecording ? (
                   <button
                     onClick={startRecording}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition cursor-pointer"
+                    className="flex items-center gap-2 px-4 py-1.5 bg-[var(--color-verivox-pink)] hover:opacity-90 text-white rounded-lg text-xs font-bold transition cursor-pointer"
                   >
                     <Mic size={14} /> Start Mic Recording
                   </button>
                 ) : (
                   <button
                     onClick={stopRecording}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-bold animate-pulse transition cursor-pointer"
+                    className="flex items-center gap-2 px-4 py-1.5 bg-[var(--color-verivox-yellow)] hover:opacity-95 text-black rounded-lg text-xs font-bold animate-pulse transition cursor-pointer"
                   >
                     Stop Recording
                   </button>
                 )}
                 {recordedBlob && (
-                  <span className="text-xs text-emerald-400 font-mono">✓ Audio captured (ready to test)</span>
+                  <span className="text-xs text-[var(--color-verivox-cyan)] font-mono">✓ Audio captured (ready to test)</span>
                 )}
               </div>
             )}
@@ -261,7 +261,7 @@ export default function AdversarialRobustness() {
             <select
               value={attackType}
               onChange={(e) => setAttackType(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl px-3.5 py-2 text-slate-200 focus:outline-none focus:border-cyan-500 font-mono"
+              className="w-full bg-[var(--color-verivox-darkest)] border border-[var(--color-verivox-border)] text-xs rounded-xl px-3.5 py-2 text-slate-200 focus:outline-none focus:border-[var(--color-verivox-cyan)] font-mono"
             >
               <option value="opus">Opus VoIP Compression (WhatsApp/Cellular)</option>
               <option value="mp3">MP3 Compression (Lossy Sub-band)</option>
@@ -276,7 +276,7 @@ export default function AdversarialRobustness() {
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-400 font-mono">
                 Attack Intensity
               </label>
-              <span className="text-xs text-cyan-400 font-mono">Level {intensity}/4</span>
+              <span className="text-xs text-[var(--color-verivox-cyan)] font-mono">Level {intensity}/4</span>
             </div>
             <input
               type="range"
@@ -284,7 +284,7 @@ export default function AdversarialRobustness() {
               max="4"
               value={intensity}
               onChange={(e) => setIntensity(Number(e.target.value))}
-              className="w-full accent-cyan-500 cursor-pointer h-2 bg-slate-800 rounded-lg"
+              className="w-full accent-[var(--color-verivox-cyan)] cursor-pointer h-2 bg-[var(--color-verivox-darkest)] rounded-lg"
             />
           </div>
 
@@ -296,12 +296,12 @@ export default function AdversarialRobustness() {
               onClick={() => setEnableDefense(!enableDefense)}
               className={`w-full py-2 px-3.5 rounded-xl text-xs font-bold transition flex items-center justify-between border cursor-pointer ${
                 enableDefense
-                  ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-300'
-                  : 'bg-slate-900 border-slate-700 text-slate-400'
+                  ? 'bg-[var(--color-verivox-cyan)]/10 border-[var(--color-verivox-cyan)]/50 text-[var(--color-verivox-cyan)]'
+                  : 'bg-[var(--color-verivox-darkest)] border-[var(--color-verivox-border)] text-slate-400'
               }`}
             >
               <span>{enableDefense ? '🛡️ Shield Active' : 'Off (Unprotected)'}</span>
-              <span className={`size-2 rounded-full ${enableDefense ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'}`} />
+              <span className={`size-2 rounded-full ${enableDefense ? 'bg-[var(--color-verivox-cyan)] animate-pulse' : 'bg-slate-600'}`} />
             </button>
           </div>
         </div>
@@ -310,7 +310,7 @@ export default function AdversarialRobustness() {
         <button
           onClick={runAnalysis}
           disabled={isProcessing}
-          className="w-full py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white rounded-xl text-xs font-bold font-mono tracking-wider transition shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+          className="w-full py-3 bg-gradient-to-r from-[var(--color-verivox-cyan)] to-blue-600 hover:opacity-90 text-[var(--color-verivox-darkest)] font-bold rounded-xl text-xs font-mono tracking-wider transition shadow-lg flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
         >
           {isProcessing ? (
             <>
@@ -329,10 +329,10 @@ export default function AdversarialRobustness() {
         <div className="space-y-6 animate-in fade-in duration-300">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Clean Audio Card */}
-            <div className="bg-[#0d1117] border border-slate-800 rounded-2xl p-5 space-y-3">
+            <div className="bg-[var(--color-verivox-dark)] border border-[var(--color-verivox-border)] rounded-2xl p-5 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-400 font-mono">1. Original Clean</span>
-                <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-300 font-mono">Baseline</span>
+                <span className="text-[10px] bg-[var(--color-verivox-darkest)] px-2 py-0.5 rounded text-slate-300 font-mono">Baseline</span>
               </div>
               <div>
                 <p className="text-3xl font-extrabold text-white font-mono">
@@ -342,7 +342,7 @@ export default function AdversarialRobustness() {
               </div>
               <button
                 onClick={() => togglePlayAudio(results.clean.preview_url, 'clean')}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 transition cursor-pointer"
+                className="w-full py-2 bg-[var(--color-verivox-darkest)] hover:opacity-80 text-[var(--color-verivox-cyan)] rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 transition cursor-pointer"
               >
                 {currentlyPlaying === 'clean' ? <Pause size={14} /> : <Play size={14} />} Listen to Original
               </button>
@@ -351,13 +351,13 @@ export default function AdversarialRobustness() {
             {/* Attacked Audio Card */}
             <div className={`border rounded-2xl p-5 space-y-3 ${
               results.attacked.evasion_detected
-                ? 'bg-rose-950/20 border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.1)]'
-                : 'bg-[#0d1117] border-slate-800'
+                ? 'bg-[var(--color-verivox-pink)]/10 border-[var(--color-verivox-pink)]/50 shadow-[0_0_20px_rgba(255,32,110,0.1)]'
+                : 'bg-[var(--color-verivox-dark)] border-[var(--color-verivox-border)]'
             }`}>
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold uppercase tracking-wider text-rose-400 font-mono">2. Attacked Audio</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-verivox-pink)] font-mono">2. Attacked Audio</span>
                 {results.attacked.evasion_detected && (
-                  <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded font-mono font-bold animate-pulse">
+                  <span className="text-[10px] bg-[var(--color-verivox-pink)]/20 text-[var(--color-verivox-pink)] px-2 py-0.5 rounded font-mono font-bold animate-pulse">
                     🚨 EVADED!
                   </span>
                 )}
@@ -366,21 +366,21 @@ export default function AdversarialRobustness() {
                 <p className="text-3xl font-extrabold text-white font-mono">
                   {(results.attacked.ai_probability * 100).toFixed(1)}%
                 </p>
-                <p className="text-xs text-rose-300 mt-1">Risk: {results.attacked.risk_level}</p>
+                <p className="text-xs text-[var(--color-verivox-pink)] mt-1">Risk: {results.attacked.risk_level}</p>
               </div>
               <button
                 onClick={() => togglePlayAudio(results.attacked.preview_url, 'attacked')}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 transition cursor-pointer"
+                className="w-full py-2 bg-[var(--color-verivox-darkest)] hover:opacity-80 text-[var(--color-verivox-pink)] rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 transition cursor-pointer"
               >
                 {currentlyPlaying === 'attacked' ? <Pause size={14} /> : <Play size={14} />} Listen to Attacked
               </button>
             </div>
 
             {/* Defended Audio Card */}
-            <div className="bg-[#0d1117] border border-emerald-500/40 rounded-2xl p-5 space-y-3 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+            <div className="bg-[var(--color-verivox-dark)] border border-[var(--color-verivox-cyan)]/40 rounded-2xl p-5 space-y-3 shadow-[0_0_20px_rgba(65,234,212,0.1)]">
               <div className="flex justify-between items-center">
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 font-mono">3. Defended Audio</span>
-                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold">
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-verivox-cyan)] font-mono">3. Defended Audio</span>
+                <span className="text-[10px] bg-[var(--color-verivox-cyan)]/20 text-[var(--color-verivox-cyan)] px-2 py-0.5 rounded font-mono font-bold">
                   🛡️ RESTORED
                 </span>
               </div>
@@ -388,13 +388,13 @@ export default function AdversarialRobustness() {
                 <p className="text-3xl font-extrabold text-white font-mono">
                   {(results.defended.ai_probability * 100).toFixed(1)}%
                 </p>
-                <p className="text-xs text-emerald-300 mt-1">
+                <p className="text-xs text-[var(--color-verivox-cyan)] mt-1">
                   Recovery: {results.defended.recovery_delta_percent > 0 ? '+' : ''}{results.defended.recovery_delta_percent}%
                 </p>
               </div>
               <button
                 onClick={() => togglePlayAudio(results.defended.preview_url, 'defended')}
-                className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-emerald-300 rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 transition cursor-pointer"
+                className="w-full py-2 bg-[var(--color-verivox-darkest)] hover:opacity-80 text-[var(--color-verivox-cyan)] rounded-lg text-xs font-bold font-mono flex items-center justify-center gap-2 transition cursor-pointer"
               >
                 {currentlyPlaying === 'defended' ? <Pause size={14} /> : <Play size={14} />} Listen to Defended
               </button>
@@ -402,18 +402,18 @@ export default function AdversarialRobustness() {
           </div>
 
           {/* Defense Telemetry Bar */}
-          <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
+          <div className="bg-[var(--color-verivox-darkest)]/80 border border-[var(--color-verivox-border)] rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 font-mono text-xs">
             <div>
               <span className="text-slate-400">Attack Signature: </span>
-              <span className="text-rose-400 font-bold">{results.defended.attack_detected}</span>
+              <span className="text-[var(--color-verivox-pink)] font-bold">{results.defended.attack_detected}</span>
             </div>
             <div>
               <span className="text-slate-400">Defense Algorithm: </span>
-              <span className="text-cyan-400 font-bold">{results.defended.defense_applied}</span>
+              <span className="text-[var(--color-verivox-cyan)] font-bold">{results.defended.defense_applied}</span>
             </div>
             <div>
               <span className="text-slate-400">Purification Latency: </span>
-              <span className="text-emerald-400 font-bold">{results.defended.defense_latency_ms} ms</span>
+              <span className="text-[var(--color-verivox-cyan)] font-bold">{results.defended.defense_latency_ms} ms</span>
             </div>
           </div>
         </div>
@@ -422,11 +422,11 @@ export default function AdversarialRobustness() {
       {/* ===================================================
           LIVE DYNAMIC 3-CURVE RESPONSE GRAPH
          =================================================== */}
-      <div className="rounded-2xl border border-slate-800 bg-[#0d1117] p-6 space-y-4">
+      <div className="rounded-2xl border border-[var(--color-verivox-border)] bg-[var(--color-verivox-dark)] p-6 space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-              <TrendingDown size={16} className="text-rose-400" />
+              <TrendingDown size={16} className="text-[var(--color-verivox-pink)]" />
               Live Attack Dip vs. Defense Restoration Curve
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -436,18 +436,18 @@ export default function AdversarialRobustness() {
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-center gap-6 py-2 border-y border-slate-800/80 font-mono text-xs">
+        <div className="flex items-center justify-center gap-6 py-2 border-y border-[var(--color-verivox-border)]/80 font-mono text-xs">
           <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+            <span className="size-2.5 rounded-full bg-[var(--color-verivox-cyan)] shadow-[0_0_8px_var(--color-verivox-cyan)]" />
             <span className="text-slate-300 font-semibold">1. Baseline Voice (Clean)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_#f43f5e]" />
-            <span className="text-rose-400 font-semibold">2. The Dip (Attacked Voice)</span>
+            <span className="size-2.5 rounded-full bg-[var(--color-verivox-pink)] shadow-[0_0_8px_var(--color-verivox-pink)]" />
+            <span className="text-[var(--color-verivox-pink)] font-semibold">2. The Dip (Attacked Voice)</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-            <span className="text-emerald-300 font-semibold">3. The Defense (Shield Active)</span>
+            <span className="size-2.5 rounded-full bg-[var(--color-verivox-yellow)] shadow-[0_0_8px_var(--color-verivox-yellow)]" />
+            <span className="text-[var(--color-verivox-yellow)] font-semibold">3. The Defense (Shield Active)</span>
           </div>
         </div>
 
@@ -461,12 +461,12 @@ export default function AdversarialRobustness() {
                 y={getY(0.5)}
                 width={chartWidth - pad.left - pad.right}
                 height={getY(0.0) - getY(0.5)}
-                fill="rgba(244, 63, 94, 0.05)"
+                fill="rgba(255, 32, 110, 0.05)"
               />
               <text
                 x={chartWidth - pad.right - 10}
                 y={getY(0.25)}
-                fill="rgba(244, 63, 94, 0.25)"
+                fill="rgba(255, 32, 110, 0.35)"
                 fontSize="12"
                 fontWeight="bold"
                 textAnchor="end"
@@ -486,7 +486,7 @@ export default function AdversarialRobustness() {
                       y1={y}
                       x2={chartWidth - pad.right}
                       y2={y}
-                      stroke={isThresh ? '#f43f5e' : '#1e293b'}
+                      stroke={isThresh ? 'var(--color-verivox-pink)' : 'var(--color-verivox-border)'}
                       strokeWidth={isThresh ? 1.5 : 0.8}
                       strokeDasharray={isThresh ? '4 4' : undefined}
                       strokeOpacity={isThresh ? 0.8 : 1}
@@ -494,7 +494,7 @@ export default function AdversarialRobustness() {
                     <text
                       x={pad.left - 8}
                       y={y + 3.5}
-                      fill={isThresh ? '#f43f5e' : '#64748b'}
+                      fill={isThresh ? 'var(--color-verivox-pink)' : '#64748b'}
                       fontSize="10"
                       fontWeight={isThresh ? 'bold' : 'normal'}
                       textAnchor="end"
@@ -510,7 +510,7 @@ export default function AdversarialRobustness() {
               <text
                 x={chartWidth - pad.right}
                 y={getY(0.5) - 6}
-                fill="#f43f5e"
+                fill="var(--color-verivox-pink)"
                 fontSize="10"
                 fontWeight="bold"
                 textAnchor="end"
@@ -532,36 +532,36 @@ export default function AdversarialRobustness() {
                 )
               })}
 
-              {/* Curve 1: Baseline Voice (Blue/Cyan) */}
+              {/* Curve 1: Baseline Voice */}
               <path
                 d={buildPath(curve.baseline)}
                 fill="none"
-                stroke="#22d3ee"
+                stroke="var(--color-verivox-cyan)"
                 strokeWidth="2.5"
                 strokeDasharray="5 5"
                 className="opacity-70"
               />
 
-              {/* Curve 2: The Dip (Rose/Red) */}
+              {/* Curve 2: The Dip */}
               <path
                 d={buildPath(curve.attacked)}
                 fill="none"
-                stroke="#f43f5e"
+                stroke="var(--color-verivox-pink)"
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                filter="drop-shadow(0 0 6px rgba(244, 63, 94, 0.4))"
+                filter="drop-shadow(0 0 6px rgba(255, 32, 110, 0.4))"
               />
 
-              {/* Curve 3: The Defense (Emerald/Green) */}
+              {/* Curve 3: The Defense */}
               <path
                 d={buildPath(curve.defended)}
                 fill="none"
-                stroke="#34d399"
+                stroke="var(--color-verivox-yellow)"
                 strokeWidth="3.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                filter="drop-shadow(0 0 6px rgba(52, 211, 153, 0.4))"
+                filter="drop-shadow(0 0 6px rgba(251, 255, 18, 0.4))"
               />
 
               {/* Data Points */}
@@ -573,14 +573,14 @@ export default function AdversarialRobustness() {
                 return (
                   <g key={idx}>
                     {/* Clean Dot */}
-                    <circle cx={getX(idx)} cy={getY(pClean)} r="4" fill="#0d1117" stroke="#22d3ee" strokeWidth="2" />
+                    <circle cx={getX(idx)} cy={getY(pClean)} r="4" fill="var(--color-verivox-dark)" stroke="var(--color-verivox-cyan)" strokeWidth="2" />
 
                     {/* Attacked Dot */}
                     <circle
                       cx={getX(idx)}
                       cy={getY(pAtk)}
                       r={isActive ? 7 : 5}
-                      fill="#f43f5e"
+                      fill="var(--color-verivox-pink)"
                       stroke={isActive ? '#ffffff' : 'none'}
                       strokeWidth={isActive ? 2 : 0}
                       className="cursor-pointer hover:r-8 transition-all"
@@ -593,7 +593,7 @@ export default function AdversarialRobustness() {
                       cx={getX(idx)}
                       cy={getY(pDef)}
                       r={isActive ? 7 : 5}
-                      fill="#34d399"
+                      fill="var(--color-verivox-yellow)"
                       stroke={isActive ? '#ffffff' : 'none'}
                       strokeWidth={isActive ? 2 : 0}
                       className="cursor-pointer hover:r-8 transition-all"
@@ -615,7 +615,7 @@ export default function AdversarialRobustness() {
               )}
             </svg>
           ) : (
-            <div className="h-48 border border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 font-mono text-xs space-y-2">
+            <div className="h-48 border border-dashed border-[var(--color-verivox-border)] rounded-xl flex flex-col items-center justify-center text-slate-500 font-mono text-xs space-y-2">
               <TrendingDown size={24} className="opacity-40" />
               <p>Click "Run Adversarial Attack & Defense Test" above to generate live response curves.</p>
             </div>
@@ -624,12 +624,12 @@ export default function AdversarialRobustness() {
 
         {/* Dynamic Footer Telemetry */}
         {curve && (
-          <div className="flex items-center justify-between p-3.5 bg-black/40 rounded-xl border border-slate-800/80 font-mono text-xs">
+          <div className="flex items-center justify-between p-3.5 bg-[var(--color-verivox-darkest)]/40 rounded-xl border border-[var(--color-verivox-border)]/80 font-mono text-xs">
             <div className="flex items-center gap-2 text-slate-300">
-              <Shield size={14} className="text-emerald-400" />
+              <Shield size={14} className="text-[var(--color-verivox-cyan)]" />
               <span>Live evaluated on current audio sample across 5 intensities (0..4)</span>
             </div>
-            <span className="text-emerald-400 font-bold">
+            <span className="text-[var(--color-verivox-cyan)] font-bold">
               Peak Recovery: +{Math.max(0, ...curve.defended.map((d, i) => Math.round((d - curve.attacked[i]) * 100)))}%
             </span>
           </div>

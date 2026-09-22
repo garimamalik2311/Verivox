@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+@theme {
+  --color-verivox-darkest: #050505;    /* Deepened near-black for base backgrounds */
+  --color-verivox-dark: #141414;        /* Slightly adjusted charcoal for cards/sidebars to maintain contrast */
+  /* ... rest of your colors ... */
+
+  --color-verivox-surface: #1a1a1a;     /* Surface layer elements */
+  --color-verivox-cardHover: #2d2d2d;   /* Hover states */
+  --color-verivox-border: #333333;      /* Subtle border tone */
+  --color-verivox-pink: #FF206E;        /* Neon Pink - Main accent / highlights[cite: 3] */
+  --color-verivox-yellow: #FBFF12;      /* Neon Yellow - Badges / warnings / active states[cite: 3] */
+  --color-verivox-cyan: #41EAD4;        /* Bright Cyan - Secondary highlights / active elements[cite: 3] */
+}
