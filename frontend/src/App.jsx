@@ -1,7 +1,15 @@
+
 'use client'
 
 import { useMemo, useState, useEffect, useRef } from 'react'
-import { LayoutDashboard, ShieldAlert, BarChart3, History as HistoryIcon, CircleHelp, ShieldCheck } from 'lucide-react'
+import {
+  LayoutDashboard,
+  ShieldAlert,
+  BarChart3,
+  History as HistoryIcon,
+  CircleHelp,
+  ShieldCheck
+} from 'lucide-react'
 
 // Sub-components
 import Overview from './pages/Overview'
@@ -34,7 +42,9 @@ export default function App() {
   // Refs for WebSockets and Audio
   const monitorGainRef = useRef(null)
   const wsRef = useRef(null)
-  const uniqueStreamIdRef = useRef(`sih_live_${Math.random().toString(36).substring(2, 9)}`)
+  const uniqueStreamIdRef = useRef(
+    `sih_live_${Math.random().toString(36).substring(2, 9)}`
+  )
   const audioContextRef = useRef(null)
   const mediaStreamRef = useRef(null)
   const processorRef = useRef(null)
@@ -54,7 +64,10 @@ export default function App() {
      ========================================================= */
   useEffect(() => {
     const streamId = uniqueStreamIdRef.current
-    const wsUrl = import.meta.env.VITE_RISK_WS_URL || `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
+    const wsUrl =
+      import.meta.env.VITE_RISK_WS_URL ||
+      `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
+
     console.log('Connecting Risk WebSocket:', wsUrl)
 
     const ws = new WebSocket(wsUrl)
@@ -72,14 +85,22 @@ export default function App() {
       console.log('Risk WebSocket closed')
       setIsConnected(false)
       setIsBackendOnline(securityTerminatedRef.current)
-      setMicStatus(securityTerminatedRef.current ? 'STREAM TERMINATED — SECURITY ALERT' : 'Disconnected')
+      setMicStatus(
+        securityTerminatedRef.current
+          ? 'STREAM TERMINATED — SECURITY ALERT'
+          : 'Disconnected'
+      )
     }
 
     ws.onerror = (error) => {
       console.error('Risk WebSocket error:', error)
       setIsConnected(false)
       setIsBackendOnline(securityTerminatedRef.current)
-      setMicStatus(securityTerminatedRef.current ? 'STREAM TERMINATED — SECURITY ALERT' : 'Backend Connection Error')
+      setMicStatus(
+        securityTerminatedRef.current
+          ? 'STREAM TERMINATED — SECURITY ALERT'
+          : 'Backend Connection Error'
+      )
     }
 
     ws.onmessage = (event) => {
@@ -118,6 +139,7 @@ export default function App() {
             clearInterval(fileIntervalRef.current)
             fileIntervalRef.current = null
           }
+
           setMicLevel(0)
           setMicStatus('ALERT: Synthetic Voice Clone Detected')
         }
@@ -133,24 +155,32 @@ export default function App() {
 
           const probability = data.ai_probability
           const existingSeries = existing.timeSeries || []
-          const newTsEntry = probability !== null && probability !== undefined
-            ? {
-                time: `${existingSeries.length * 3}s`,
-                prob: Math.round(Number(probability) * 100)
-              }
-            : null
+
+          const newTsEntry =
+            probability !== null && probability !== undefined
+              ? {
+                  time: `${existingSeries.length * 3}s`,
+                  prob: Math.round(Number(probability) * 100)
+                }
+              : null
 
           return {
             ...prev,
             [currentStreamId]: {
               ...existing,
               ...data,
-              alert_triggered: data.alert_triggered === true || existing.alert_triggered === true,
-              alert_reason: data.alert_reason || existing.alert_reason || null,
-              alert_consecutive_flags: data.alert_triggered === true
-                ? (data.consecutive_flags ?? 0)
-                : (existing.alert_consecutive_flags ?? null),
-              timeSeries: newTsEntry ? [...existingSeries, newTsEntry].slice(-60) : existingSeries,
+              alert_triggered:
+                data.alert_triggered === true ||
+                existing.alert_triggered === true,
+              alert_reason:
+                data.alert_reason || existing.alert_reason || null,
+              alert_consecutive_flags:
+                data.alert_triggered === true
+                  ? (data.consecutive_flags ?? 0)
+                  : (existing.alert_consecutive_flags ?? null),
+              timeSeries: newTsEntry
+                ? [...existingSeries, newTsEntry].slice(-60)
+                : existingSeries,
               name: data.name || existing.name || currentStreamId
             }
           }
@@ -160,14 +190,21 @@ export default function App() {
 
         setStreamHistories((prev) => {
           const hist = prev[currentStreamId] || []
+
           const newEntry = {
             window_id: data.window_id ?? hist.length + 1,
-            timestamp: data.timestamp ? new Date(Number(data.timestamp) * 1000).toLocaleTimeString() : new Date().toLocaleTimeString(),
-            speech_detected: data.speech_detected ?? (data.ai_probability !== null && data.ai_probability !== undefined),
+            timestamp: data.timestamp
+              ? new Date(Number(data.timestamp) * 1000).toLocaleTimeString()
+              : new Date().toLocaleTimeString(),
+            speech_detected:
+              data.speech_detected ??
+              (data.ai_probability !== null &&
+                data.ai_probability !== undefined),
             ai_probability: data.ai_probability ?? null,
             rolling_score: data.rolling_score ?? null,
             risk_level: data.risk_level ?? null
           }
+
           return {
             ...prev,
             [currentStreamId]: [newEntry, ...hist].slice(0, 30)
@@ -179,13 +216,18 @@ export default function App() {
     }
 
     return () => {
-      if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+      if (
+        ws.readyState === WebSocket.CONNECTING ||
+        ws.readyState === WebSocket.OPEN
+      ) {
         console.log('Cleaning up Risk WebSocket:', wsUrl)
         ws.close()
       }
+
       if (wsRef.current === ws) {
         wsRef.current = null
       }
+
       stopMicrophoneStream()
     }
   }, [])
@@ -193,10 +235,12 @@ export default function App() {
   /* =========================================================
      AUDIO HELPERS
      ========================================================= */
+
   const TARGET_SAMPLE_RATE = 16000
 
   const resampleTo16k = (input, inputSampleRate) => {
     if (inputSampleRate === TARGET_SAMPLE_RATE) return input
+
     const ratio = inputSampleRate / TARGET_SAMPLE_RATE
     const outputLength = Math.round(input.length / ratio)
     const output = new Float32Array(outputLength)
@@ -206,31 +250,46 @@ export default function App() {
       const index = Math.floor(position)
       const fraction = position - index
       const sample1 = input[index] || 0
-      const sample2 = index + 1 < input.length ? input[index + 1] : sample1
+      const sample2 =
+        index + 1 < input.length ? input[index + 1] : sample1
+
       output[i] = sample1 + (sample2 - sample1) * fraction
     }
+
     return output
   }
 
   const float32ToPCM16 = (float32Data) => {
     const pcm16 = new Int16Array(float32Data.length)
+
     for (let i = 0; i < float32Data.length; i++) {
       const sample = Math.max(-1, Math.min(1, float32Data[i]))
-      pcm16[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff
+
+      pcm16[i] =
+        sample < 0
+          ? sample * 0x8000
+          : sample * 0x7fff
     }
+
     return pcm16
   }
 
   const calculateRMS = (audio) => {
     if (!audio || audio.length === 0) return 0
+
     let sum = 0
-    for (let i = 0; i < audio.length; i++) sum += audio[i] * audio[i]
+
+    for (let i = 0; i < audio.length; i++) {
+      sum += audio[i] * audio[i]
+    }
+
     return Math.sqrt(sum / audio.length)
   }
 
   /* =========================================================
      MICROPHONE STREAM
      ========================================================= */
+
   const configureSecurityContext = () => {
     const ws = wsRef.current
 
@@ -251,16 +310,22 @@ export default function App() {
       return false
     }
 
-    if (scenario === 'high_value_transaction' && parsedAmount === null) {
+    if (
+      scenario === 'high_value_transaction' &&
+      parsedAmount === null
+    ) {
       setMicStatus('Transaction Amount Required')
       return false
     }
 
     const payload = {
       type: 'session_context',
-      scenario: scenario === 'high_value_transaction' ? null : scenario,
+      scenario:
+        scenario === 'high_value_transaction' ? null : scenario,
       transaction_amount_inr:
-        scenario === 'high_value_transaction' ? parsedAmount : null,
+        scenario === 'high_value_transaction'
+          ? parsedAmount
+          : null
     }
 
     ws.send(JSON.stringify(payload))
@@ -290,19 +355,29 @@ export default function App() {
         }
       }
 
-      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
+      const mediaStream =
+        await navigator.mediaDevices.getUserMedia(constraints)
+
       mediaStreamRef.current = mediaStream
 
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext
+
       const audioCtx = new AudioContextClass()
       audioContextRef.current = audioCtx
+
       const actualSampleRate = audioCtx.sampleRate
 
-      const source = audioCtx.createMediaStreamSource(mediaStream)
+      const source =
+        audioCtx.createMediaStreamSource(mediaStream)
+
       sourceRef.current = source
 
       const bufferSize = 4096
-      const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1)
+
+      const processor =
+        audioCtx.createScriptProcessor(bufferSize, 1, 1)
+
       processorRef.current = processor
 
       const silentGain = audioCtx.createGain()
@@ -310,14 +385,27 @@ export default function App() {
 
       processor.onaudioprocess = (event) => {
         const ws = wsRef.current
+
         if (!ws || ws.readyState !== WebSocket.OPEN) return
 
-        const inputData = event.inputBuffer.getChannelData(0)
-        const rms = calculateRMS(inputData)
-        setMicLevel(Math.min(Math.round(rms * 200), 100))
+        const inputData =
+          event.inputBuffer.getChannelData(0)
 
-        const audio16k = resampleTo16k(inputData, actualSampleRate)
-        const pcm16 = float32ToPCM16(audio16k)
+        const rms = calculateRMS(inputData)
+
+        setMicLevel(
+          Math.min(Math.round(rms * 200), 100)
+        )
+
+        const audio16k =
+          resampleTo16k(
+            inputData,
+            actualSampleRate
+          )
+
+        const pcm16 =
+          float32ToPCM16(audio16k)
+
         if (pcm16.length > 0) {
           ws.send(pcm16.buffer)
         }
@@ -329,13 +417,16 @@ export default function App() {
 
       const monitorGain = audioCtx.createGain()
       monitorGain.gain.value = 0
+
       source.connect(monitorGain)
       monitorGain.connect(audioCtx.destination)
+
       monitorGainRef.current = monitorGain
 
       if (audioCtx.state === 'suspended') {
         await audioCtx.resume()
       }
+
       setMicStatus('Live Mic Streaming...')
     } catch (error) {
       console.error('Microphone access error:', error)
@@ -348,28 +439,42 @@ export default function App() {
       processorRef.current.disconnect()
       processorRef.current = null
     }
+
     if (sourceRef.current) {
       sourceRef.current.disconnect()
       sourceRef.current = null
     }
+
     if (monitorGainRef.current) {
       monitorGainRef.current.disconnect()
       monitorGainRef.current = null
     }
+
     setIsLiveMonitoring(false)
+
     if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop())
+      mediaStreamRef.current
+        .getTracks()
+        .forEach((track) => track.stop())
+
       mediaStreamRef.current = null
     }
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+
+    if (
+      audioContextRef.current &&
+      audioContextRef.current.state !== 'closed'
+    ) {
       audioContextRef.current.close()
       audioContextRef.current = null
     }
+
     if (fileIntervalRef.current) {
       clearInterval(fileIntervalRef.current)
       fileIntervalRef.current = null
     }
+
     setMicLevel(0)
+
     if (isConnected) {
       setMicStatus('Connected / Ready')
     }
@@ -377,16 +482,21 @@ export default function App() {
 
   const toggleLiveMonitor = () => {
     if (!monitorGainRef.current) return
+
     const next = !isLiveMonitoring
+
     monitorGainRef.current.gain.value = next ? 1 : 0
+
     setIsLiveMonitoring(next)
   }
 
   /* =========================================================
      AUDIO FILE STREAMING
      ========================================================= */
+
   const handleFileUpload = async (event) => {
     const file = event.target.files?.[0]
+
     if (!file) return
 
     if (!contextConfigured) {
@@ -397,69 +507,132 @@ export default function App() {
 
     try {
       stopMicrophoneStream()
+
       setInputMode('file')
       setMicStatus(`Preparing: ${file.name}`)
 
       const arrayBuffer = await file.arrayBuffer()
-      const AudioContextClass = window.AudioContext || window.webkitAudioContext
+
+      const AudioContextClass =
+        window.AudioContext || window.webkitAudioContext
+
       const audioCtx = new AudioContextClass()
-      const decodedAudio = await audioCtx.decodeAudioData(arrayBuffer)
-      const channelData = decodedAudio.getChannelData(0)
-      const sampleRate = decodedAudio.sampleRate
-      const resampled = resampleTo16k(channelData, sampleRate)
-      const pcm16 = float32ToPCM16(resampled)
+
+      const decodedAudio =
+        await audioCtx.decodeAudioData(arrayBuffer)
+
+      const channelData =
+        decodedAudio.getChannelData(0)
+
+      const sampleRate =
+        decodedAudio.sampleRate
+
+      const resampled =
+        resampleTo16k(channelData, sampleRate)
+
+      const pcm16 =
+        float32ToPCM16(resampled)
 
       const ws = wsRef.current
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        alert('WebSocket is not connected to the backend.')
+
+      if (
+        !ws ||
+        ws.readyState !== WebSocket.OPEN
+      ) {
+        alert(
+          'WebSocket is not connected to the backend.'
+        )
+
         await audioCtx.close()
         return
       }
 
-      const chunkSize = 8000 // 0.5 sec at 16kHz PCM16
+      const chunkSize = 8000
       let offset = 0
-      setMicStatus(`Streaming File: ${file.name}`)
+
+      setMicStatus(
+        `Streaming File: ${file.name}`
+      )
+
       fileStreamActiveRef.current = true
 
-      fileIntervalRef.current = setInterval(() => {
-        if (!fileStreamActiveRef.current) {
-          clearInterval(fileIntervalRef.current)
-          fileIntervalRef.current = null
-          return
-        }
+      fileIntervalRef.current =
+        setInterval(() => {
+          if (!fileStreamActiveRef.current) {
+            clearInterval(fileIntervalRef.current)
+            fileIntervalRef.current = null
+            return
+          }
 
-        if (offset >= pcm16.length) {
-          fileStreamActiveRef.current = false
-          clearInterval(fileIntervalRef.current)
-          fileIntervalRef.current = null
-          setMicLevel(0)
-          setMicStatus('File Stream Complete')
-          audioCtx.close()
-          return
-        }
+          if (offset >= pcm16.length) {
+            fileStreamActiveRef.current = false
 
-        const chunk = pcm16.subarray(offset, offset + chunkSize)
-        ws.send(chunk.buffer)
+            clearInterval(fileIntervalRef.current)
+            fileIntervalRef.current = null
 
-        const chunkRms = calculateRMS(resampled.subarray(offset, Math.min(offset + chunkSize, resampled.length)))
-        setMicLevel(Math.min(Math.round(chunkRms * 200), 100))
-        offset += chunkSize
-      }, 500)
+            setMicLevel(0)
+            setMicStatus('File Stream Complete')
+
+            audioCtx.close()
+
+            return
+          }
+
+          const chunk =
+            pcm16.subarray(
+              offset,
+              offset + chunkSize
+            )
+
+          ws.send(chunk.buffer)
+
+          const chunkRms =
+            calculateRMS(
+              resampled.subarray(
+                offset,
+                Math.min(
+                  offset + chunkSize,
+                  resampled.length
+                )
+              )
+            )
+
+          setMicLevel(
+            Math.min(
+              Math.round(chunkRms * 200),
+              100
+            )
+          )
+
+          offset += chunkSize
+        }, 500)
     } catch (error) {
-      console.error('Audio file processing error:', error)
+      console.error(
+        'Audio file processing error:',
+        error
+      )
+
       setMicStatus('Audio File Error')
-      alert('Failed to decode audio file. Please use a valid WAV/MP3 file.')
+
+      alert(
+        'Failed to decode audio file. Please use a valid WAV/MP3 file.'
+      )
     }
   }
 
   const acknowledgeAlert = () => {
     if (fileIntervalRef.current) {
-      console.warn('ACKNOWLEDGE ALERT: stopping active file stream')
+      console.warn(
+        'ACKNOWLEDGE ALERT: stopping active file stream'
+      )
+
       clearInterval(fileIntervalRef.current)
       fileIntervalRef.current = null
+
       setMicLevel(0)
       setMicStatus('Stream frozen after alert')
     }
+
     setStreams((prev) => ({
       ...prev,
       [activeStreamId]: {
@@ -471,85 +644,219 @@ export default function App() {
 
   const summary = useMemo(() => {
     const streamList = Object.values(streams)
-    const backendStreams = streamList.filter(stream => stream.ai_probability !== undefined || stream.rolling_score !== undefined || stream.risk_level !== undefined)
+
+    const backendStreams = streamList.filter(
+      (stream) =>
+        stream.ai_probability !== undefined ||
+        stream.rolling_score !== undefined ||
+        stream.risk_level !== undefined
+    )
+
     return {
       total: streamList.length,
-      high: backendStreams.filter(stream => stream.risk_level === 'HIGH').length,
-      active: backendStreams.filter(stream => stream.speech_detected === true).length
+      high: backendStreams.filter(
+        (stream) => stream.risk_level === 'HIGH'
+      ).length,
+      active: backendStreams.filter(
+        (stream) => stream.speech_detected === true
+      ).length
     }
   }, [streams])
 
   return (
-    <main className="flex min-h-screen flex-col md:flex-row bg-verivox-darkest text-slate-100 font-sans">
-      
+    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#03040b] font-sans text-white md:flex-row">
+
       {/* =====================================================
-          SIDEBAR (Retro Future Theme)
-         ===================================================== */}
-      <aside className="flex w-full flex-col border-b border-verivox-border bg-verivox-surface/90 p-5 md:h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r lg:w-72">
-        
+          AURORA BACKGROUND
+          ===================================================== */}
+
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+
+        {/* Aurora glow */}
+        <div className="absolute -left-40 -top-40 h-[560px] w-[560px] rounded-full bg-cyan-400/[0.13] blur-[150px]" />
+
+        <div className="absolute right-[-180px] top-[5%] h-[650px] w-[650px] rounded-full bg-violet-500/[0.16] blur-[170px]" />
+
+        <div className="absolute bottom-[-240px] left-[20%] h-[600px] w-[800px] rounded-full bg-fuchsia-500/[0.10] blur-[180px]" />
+
+        <div className="absolute bottom-[0%] right-[12%] h-[400px] w-[400px] rounded-full bg-emerald-400/[0.08] blur-[140px]" />
+
+        {/* subtle cyan beam */}
+        <div className="absolute left-[38%] top-[-10%] h-[750px] w-[1px] rotate-[24deg] bg-gradient-to-b from-transparent via-cyan-300/[0.10] to-transparent blur-[1px]" />
+
+        {/* technical grid */}
+        <div
+          className="absolute inset-0 opacity-[0.045]"
+          style={{
+            backgroundImage:
+              'linear-gradient(rgba(148,163,184,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.35) 1px, transparent 1px)',
+            backgroundSize: '42px 42px'
+          }}
+        />
+
+        {/* vignette */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,rgba(2,3,10,0.72)_100%)]" />
+      </div>
+
+      {/* =====================================================
+          SIDEBAR
+          ===================================================== */}
+
+      <aside className="relative z-10 flex w-full flex-col border-b border-white/[0.10] bg-[#060711]/90 p-5 shadow-[8px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl md:h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r lg:w-72">
+
         {/* BRANDING */}
+
         <div className="mb-8 flex items-center gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-verivox-cyan text-verivox-darkest">
-            <ShieldCheck size={22} />
+
+          <div className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan-300/30 bg-gradient-to-br from-cyan-400/20 via-violet-500/20 to-fuchsia-500/20 shadow-[0_0_30px_rgba(34,211,238,0.20)]">
+
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-300/10 to-fuchsia-400/10" />
+
+            <ShieldCheck
+              size={23}
+              strokeWidth={2.2}
+              className="relative z-10 text-cyan-200 drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]"
+            />
+
+            <div className="absolute inset-0 rounded-xl bg-cyan-400/10 blur-md" />
           </div>
+
           <div>
-            <p className="text-lg font-bold tracking-tight text-white leading-tight">
-              VeriVox <br/>
-              <span className="text-[10px] text-verivox-yellow font-mono font-normal uppercase tracking-wider">
-                Neural Guard
-              </span>
+
+            <p className="text-[19px] font-extrabold leading-[0.95] tracking-tight text-white drop-shadow-[0_0_14px_rgba(255,255,255,0.12)]">
+              VeriVox
             </p>
+
+            <p className="mt-1 bg-gradient-to-r from-cyan-200 via-violet-200 to-fuchsia-200 bg-clip-text text-[9px] font-mono font-semibold uppercase tracking-[0.24em] text-transparent">
+              Neural Guard
+            </p>
+
           </div>
         </div>
 
         {/* NAVIGATION */}
-        <nav className="flex flex-col gap-2 flex-1">
+
+        <nav className="flex flex-1 flex-col gap-2">
+
           {[
-            { id: 'overview', label: 'Live Dashboard', icon: LayoutDashboard },
-            { id: 'adversarial', label: 'Adversarial', icon: ShieldAlert },
-            { id: 'analytics', label: 'Deep Analytics', icon: BarChart3 },
-            { id: 'history', label: 'History', icon: HistoryIcon },
-            { id: 'security', label: 'Security Report', icon: ShieldCheck },
-            { id: 'how', label: 'Architecture', icon: CircleHelp }
-          ].map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              onClick={() => setActivePage(id)}
-              className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-sm font-semibold transition-all ${
-                activePage === id
-                  ? 'bg-verivox-yellow text-verivox-darkest shadow-md shadow-verivox-pink/20'
-                  : 'text-slate-400 hover:bg-verivox-cardHover hover:text-white'
-              }`}
-            >
-              <Icon size={18} />
-              {label}
-            </button>
-          ))}
+            {
+              id: 'overview',
+              label: 'Live Dashboard',
+              icon: LayoutDashboard
+            },
+            {
+              id: 'adversarial',
+              label: 'Adversarial',
+              icon: ShieldAlert
+            },
+            {
+              id: 'analytics',
+              label: 'Deep Analytics',
+              icon: BarChart3
+            },
+            {
+              id: 'history',
+              label: 'History',
+              icon: HistoryIcon
+            },
+            {
+              id: 'security',
+              label: 'Security Report',
+              icon: ShieldCheck
+            },
+            {
+              id: 'how',
+              label: 'Architecture',
+              icon: CircleHelp
+            }
+          ].map(
+            ({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                onClick={() => setActivePage(id)}
+                className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-[13px] font-semibold tracking-[0.01em] transition-all duration-300 ${
+                  activePage === id
+                    ? 'border-cyan-300/30 bg-gradient-to-r from-cyan-400/[0.14] via-violet-500/[0.12] to-fuchsia-500/[0.10] text-white shadow-[0_0_28px_rgba(34,211,238,0.10),inset_0_1px_0_rgba(255,255,255,0.08)]'
+                    : 'border-transparent text-slate-300 hover:border-white/[0.12] hover:bg-white/[0.055] hover:text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.05)]'
+                }`}
+              >
+
+                {activePage === id && (
+                  <>
+                    <span className="absolute left-0 top-1/2 h-8 w-[2px] -translate-y-1/2 rounded-full bg-gradient-to-b from-cyan-300 via-violet-400 to-fuchsia-400 shadow-[0_0_12px_rgba(34,211,238,0.9)]" />
+
+                    <span className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-cyan-300/[0.07] to-transparent" />
+                  </>
+                )}
+
+                <Icon
+                  size={18}
+                  strokeWidth={activePage === id ? 2.2 : 1.9}
+                  className={
+                    activePage === id
+                      ? 'relative z-10 text-cyan-200 drop-shadow-[0_0_7px_rgba(103,232,249,0.7)]'
+                      : 'relative z-10 text-slate-400 transition-all group-hover:text-cyan-200 group-hover:drop-shadow-[0_0_6px_rgba(103,232,249,0.5)]'
+                  }
+                />
+
+                <span className="relative z-10">
+                  {label}
+                </span>
+
+                {activePage === id && (
+                  <span className="ml-auto size-1.5 rounded-full bg-cyan-300 shadow-[0_0_9px_rgba(103,232,249,0.9)]" />
+                )}
+              </button>
+            )
+          )}
         </nav>
 
         {/* BOTTOM STATUS & ACTIONS */}
+
         <div className="mt-8 flex flex-col gap-4">
+
           <button
-            onClick={() => setShowInspector((v) => !v)}
-            className="w-full rounded-lg border border-verivox-cyan/40 bg-verivox-cardHover px-4 py-2.5 text-xs font-mono text-verivox-cyan transition hover:bg-verivox-border"
+            onClick={() =>
+              setShowInspector((v) => !v)
+            }
+            className="group relative w-full overflow-hidden rounded-xl border border-cyan-300/20 bg-gradient-to-r from-cyan-400/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] px-4 py-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-cyan-200 shadow-[0_0_22px_rgba(34,211,238,0.05)] transition-all duration-300 hover:border-cyan-300/40 hover:bg-cyan-400/10 hover:text-cyan-100 hover:shadow-[0_0_30px_rgba(34,211,238,0.12)]"
           >
-            {showInspector ? 'Hide Contract' : '</> JSON Payload'}
+            <span className="mr-2 text-cyan-400/70">
+              $
+            </span>
+
+            {showInspector
+              ? 'hide_contract'
+              : 'inspect_payload'}
+
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-cyan-400/30 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-300/70">
+              →
+            </span>
           </button>
 
-          <div className="flex flex-col gap-2 rounded-lg border border-verivox-border bg-verivox-cardHover p-3 text-xs font-medium text-slate-300">
-            <div className="flex items-center gap-2">
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.11] bg-white/[0.045] p-3.5 text-xs backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/[0.04] via-transparent to-violet-500/[0.07]" />
+
+            <div className="relative flex items-center gap-2.5">
+
               <span
                 className={`size-2.5 shrink-0 rounded-full ${
-                  selected.security_terminated || securityTerminated
-                    ? 'bg-verivox-yellow'
+                  selected.security_terminated ||
+                  securityTerminated
+                    ? 'bg-amber-300 shadow-[0_0_14px_rgba(252,211,77,1)]'
                     : isBackendOnline
-                    ? 'bg-emerald-400 animate-pulse'
-                    : 'bg-verivox-cyan'
+                    ? 'bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.9)] animate-pulse'
+                    : 'bg-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.9)]'
                 }`}
               />
-              <span className="font-mono font-bold text-white">Status</span>
+
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-white">
+                System Status
+              </span>
             </div>
-            <span className="font-mono text-[10px] text-slate-400 leading-tight">
+
+            <span className="relative mt-2 block font-mono text-[9px] font-semibold leading-relaxed tracking-[0.08em] text-slate-400">
               {securityTerminated
                 ? 'TERMINATED · SECURITY ALERT'
                 : isBackendOnline
@@ -558,15 +865,27 @@ export default function App() {
                   : 'BACKEND ONLINE'
                 : 'BACKEND OFFLINE'}
             </span>
+
+            <div className="relative mt-3 h-px w-full bg-gradient-to-r from-cyan-400/20 via-violet-400/10 to-transparent" />
+
+            <div className="relative mt-2 flex items-center justify-between text-[8px] font-mono uppercase tracking-[0.14em] text-slate-500">
+              <span>VERIVOX CORE</span>
+              <span className="text-cyan-300/70">
+                LIVE
+              </span>
+            </div>
           </div>
         </div>
       </aside>
 
       {/* =====================================================
           MAIN CONTENT AREA
-         ===================================================== */}
-      <div className="flex-1 overflow-y-auto md:h-screen bg-verivox-dark">
+          ===================================================== */}
+
+      <div className="relative z-10 flex-1 overflow-y-auto md:h-screen">
+
         <div className="mx-auto max-w-7xl px-5 py-8 lg:p-10">
+
           {activePage === 'overview' && (
             <Overview
               micStatus={micStatus}
@@ -599,11 +918,13 @@ export default function App() {
               configureSecurityContext={configureSecurityContext}
             />
           )}
+
           {activePage === 'adversarial' && (
             <div className="mx-auto max-w-6xl space-y-8">
               <AdversarialRobustness />
             </div>
           )}
+
           {activePage === 'analytics' && (
             <Analytics
               streams={streams}
@@ -613,6 +934,7 @@ export default function App() {
               selected={selected}
             />
           )}
+
           {activePage === 'history' && (
             <History
               streams={streams}
@@ -621,11 +943,17 @@ export default function App() {
               currentHistory={currentHistory}
             />
           )}
-          {activePage === 'security' && <SecurityReport streams={streams} selected={selected} />}
+
+          {activePage === 'security' && (
+            <SecurityReport
+              streams={streams}
+              selected={selected}
+            />
+          )}
+
           {activePage === 'how' && <Architecture />}
         </div>
       </div>
-      
     </main>
   )
 }
