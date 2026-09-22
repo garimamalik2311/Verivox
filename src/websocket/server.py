@@ -35,7 +35,10 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -948,6 +951,12 @@ async def audio_websocket_endpoint(
 
                         continue
 
+                    yin_analysis = await asyncio.to_thread(
+                        extract_yin_pitch_stats,
+                        audio_window,
+                        sr=SAMPLE_RATE,
+                    )
+
                     # --------------------------------------------------------
                     # SLA
                     # --------------------------------------------------------
@@ -1164,6 +1173,9 @@ async def audio_websocket_endpoint(
                                 shap_result.get(
                                     "vocoder_flag"
                                 )
+                            ),
+                            "yin_analysis": (
+                                yin_analysis
                             ),
                             "diagnostic_cues": (
                                 shap_result.get(

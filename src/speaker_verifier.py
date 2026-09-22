@@ -13,12 +13,24 @@ on any two 192-D vectors, real or fake, so there was nothing to fix there.
 NOTE: the first time this runs on any machine, it downloads ~80MB of
 model weights from huggingface.co and needs internet access. After that
 first run, it's cached locally and works offline.
+
+KNOWN ISSUE (fixed below): running torch's multi-threaded tensor ops in
+the same process as XGBoost/SHAP can segfault on macOS. This isn't the
+"two copies of libomp" issue documented in the README (that one crashes
+on *import*, before any real computation) — this one crashes *inside* a
+real tensor operation, in OpenMP's own thread-barrier synchronization
+code, confirmed via macOS crash report (functions like __kmp_suspend_64
+and __kmp_fork_barrier). Since we only ever process one 1-second audio
+window at a time, forcing torch to single-threaded mode avoids this
+entirely, with no meaningful speed cost for our use case.
 """
 
 import numpy as np
 
 try:
     import torch
+    torch.set_num_threads(1)  # see KNOWN ISSUE above — avoids an
+                               # OpenMP thread-barrier segfault
     from speechbrain.inference.speaker import EncoderClassifier
     _SPEECHBRAIN_AVAILABLE = True
 except ImportError:

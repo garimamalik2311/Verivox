@@ -32,17 +32,17 @@ def extract_speaker_id(full_path: str, root_dir: str) -> str:
     """
     rel_path = os.path.relpath(full_path, root_dir)
     parts = rel_path.split(os.sep)
-    
+
     # If file is nested inside bucket/speaker_dir/file.wav
     if len(parts) >= 3:
         return parts[1]
-    
+
     # Fallback to extracting from filename prefix
     filename = parts[-1]
     match = re.match(r"^([a-zA-Z0-9]+_[a-zA-Z0-9]+)_", filename)
     if match:
         return match.group(1)
-        
+
     return parts[0]  # Fallback to bucket name if no speaker subfolder exists
 
 def build_manifest(raw_dir: str = "data/raw", output_csv: str = "data/processed/manifest.csv") -> pd.DataFrame:
@@ -71,7 +71,7 @@ def build_manifest(raw_dir: str = "data/raw", output_csv: str = "data/processed/
                 })
 
     df = pd.DataFrame(records)
-    
+
     if df.empty:
         print("Warning: No audio files found in data/raw/")
         return df
