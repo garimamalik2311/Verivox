@@ -9,7 +9,12 @@ import time
 import joblib
 import numpy as np
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import os
+import tempfile
+import soundfile as sf
+import librosa
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from src.models.fused_acoustic_model import DualStreamFusionClassifier
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
@@ -74,6 +79,14 @@ notification_engine = NotificationEngine()
 dispatch_service = DispatchService()
 speaker_registry = SpeakerRegistry()
 speaker_verifier = SpeakerVerifier()
+
+# Trilingual Dual-Stream Neural Acoustic Fusion Engine (MMS-300M + 58D DSP)
+try:
+    dual_stream_classifier = DualStreamFusionClassifier()
+    print("[dual-stream] Trilingual MMS-300M + 58D Acoustic Fusion model active.")
+except Exception as exc:
+    print(f"[dual-stream] Model load deferred or unavailable: {exc}")
+    dual_stream_classifier = None
 
 # One ProsodyBuffer per active stream.
 prosody_buffers: dict[str, ProsodyBuffer] = {}
@@ -154,7 +167,38 @@ def release_stream(stream_id: str) -> None:
 # ============================================================================
 # HEALTH CHECK
 # ============================================================================
+@app.post("/api/detect/dual-stream")
+async def detect_dual_stream_file(file: UploadFile = File(...)):
+    """
+    Dedicated endpoint for on-demand Dual-Stream analysis of an audio file.
+    Supports .wav, .mp3, .ogg files.
+    """
+    if dual_stream_classifier is None:
+        return {"error": "Dual-Stream model not available on this server"}
 
+    audio_bytes = await file.read()
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
+
+    try:
+        audio, sr = sf.read(tmp_path)
+        if audio.ndim > 1:
+            audio = np.mean(audio, axis=1)
+        if sr != 16000:
+            audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+        
+        # Test up to first 16,000 samples (1.0s window)
+        chunk = audio[:16000] if len(audio) >= 16000 else np.pad(audio, (0, 16000 - len(audio)))
+        res = await asyncio.to_thread(dual_stream_classifier.predict, chunk)
+        res["filename"] = file.filename
+        return res
+    except Exception as exc:
+        return {"error": f"Audio processing failed: {exc}"}
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            
 @app.get("/health")
 def health_check():
     """Return backend health and model information."""
@@ -1220,6 +1264,20 @@ async def audio_websocket_endpoint(
                             "shap_top_features": [],
                             "shap_features": [],
                         }
+                        
+                                            # --------------------------------------------------------
+                    # Feature 5: Dual-Stream Trilingual Neural Verification
+                    # --------------------------------------------------------
+                    dual_stream_res = None
+                    if dual_stream_classifier is not None and (ai_probability >= 0.40 or window_id % 4 == 0):
+                        try:
+                            dual_stream_res = await asyncio.to_thread(
+                                dual_stream_classifier.predict,
+                                audio_window,
+                                sr=SAMPLE_RATE,
+                            )
+                        except Exception as exc:
+                            print(f"[dual-stream] Inference failed for window={window_id}: {exc}")
 
                     # --------------------------------------------------------
                     # Canonical ModelPrediction
@@ -1303,6 +1361,29 @@ async def audio_websocket_endpoint(
 
                     result = result.model_copy(
                         update={
+                                "dual_stream_probability": (
+                                dual_stream_res.get("ai_probability")
+                                if dual_stream_res
+                                else None
+                            ),
+                            "dual_stream_risk": (
+                                dual_stream_res.get("risk_level")
+                                if dual_stream_res
+                                else None
+                            ),
+                            "modality_gate_alpha": (
+                                dual_stream_res.get("modality_gate_alpha")
+                                if dual_stream_res
+                                else 0.64
+                            ),
+                            "dual_stream_latency_ms": (
+                                dual_stream_res.get("latency_ms")
+                                if dual_stream_res
+                                else None
+                            ),
+                            "target_languages": ["en", "hi", "ta"],
+                            
+                        
                             "yin_analysis": yin_analysis,
                             "prosody_pitch_variance": (
                                 pitch_variance

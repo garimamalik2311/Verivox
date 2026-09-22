@@ -1,0 +1,16 @@
+{
+  "model_name": "facebook/mms-300m",
+  "ssl_dim": 1024,
+  "dsp_dim": 58,
+  "proj_dim": 128,
+  "metrics": {
+    "overall_auc": 0.9611063094209162,
+    "overall_acc": 0.9
+  },
+  "target_languages": [
+    "en",
+    "hi",
+    "ta"
+  ],
+  "decision_threshold": 0.5
+}
