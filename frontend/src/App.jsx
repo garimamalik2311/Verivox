@@ -355,59 +355,63 @@ export default function App() {
         }
       }
 
-      const mediaStream =
-        await navigator.mediaDevices.getUserMedia(constraints)
-
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
       mediaStreamRef.current = mediaStream
 
-      const AudioContextClass =
-        window.AudioContext || window.webkitAudioContext
-
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext
       const audioCtx = new AudioContextClass()
       audioContextRef.current = audioCtx
 
       const actualSampleRate = audioCtx.sampleRate
-
-      const source =
-        audioCtx.createMediaStreamSource(mediaStream)
-
+      const source = audioCtx.createMediaStreamSource(mediaStream)
       sourceRef.current = source
 
       const bufferSize = 4096
-
-      const processor =
-        audioCtx.createScriptProcessor(bufferSize, 1, 1)
-
+      const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1)
       processorRef.current = processor
 
       const silentGain = audioCtx.createGain()
       silentGain.gain.value = 0
 
+      // Buffers to accumulate audio and prevent React render spam
+      let pcmBuffer = new Int16Array(0)
+      let rmsAccumulator = 0
+      let rmsCount = 0
+      const CHUNK_SIZE = 8000 // 0.5 seconds at 16kHz to match file upload
+
       processor.onaudioprocess = (event) => {
         const ws = wsRef.current
-
         if (!ws || ws.readyState !== WebSocket.OPEN) return
 
-        const inputData =
-          event.inputBuffer.getChannelData(0)
+        const inputData = event.inputBuffer.getChannelData(0)
+        
+        // 1. Accumulate RMS to average it out over the 500ms chunk
+        rmsAccumulator += calculateRMS(inputData)
+        rmsCount++
 
-        const rms = calculateRMS(inputData)
+        // 2. Resample and convert to PCM16
+        const audio16k = resampleTo16k(inputData, actualSampleRate)
+        const pcm16 = float32ToPCM16(audio16k)
 
-        setMicLevel(
-          Math.min(Math.round(rms * 200), 100)
-        )
+        // 3. Append new samples to our holding buffer
+        const newBuffer = new Int16Array(pcmBuffer.length + pcm16.length)
+        newBuffer.set(pcmBuffer, 0)
+        newBuffer.set(pcm16, pcmBuffer.length)
+        pcmBuffer = newBuffer
 
-        const audio16k =
-          resampleTo16k(
-            inputData,
-            actualSampleRate
-          )
+        // 4. Only send data when we have a full chunk (matches File Stream behavior)
+        while (pcmBuffer.length >= CHUNK_SIZE) {
+          const chunk = pcmBuffer.slice(0, CHUNK_SIZE)
+          ws.send(chunk.buffer)
 
-        const pcm16 =
-          float32ToPCM16(audio16k)
+          // Update UI Mic Level only twice a second (stops React stuttering)
+          const avgRms = rmsCount > 0 ? rmsAccumulator / rmsCount : 0
+          setMicLevel(Math.min(Math.round(avgRms * 200), 100))
 
-        if (pcm16.length > 0) {
-          ws.send(pcm16.buffer)
+          // Reset accumulators and keep remainder of buffer
+          rmsAccumulator = 0
+          rmsCount = 0
+          pcmBuffer = pcmBuffer.slice(CHUNK_SIZE)
         }
       }
 
@@ -420,7 +424,6 @@ export default function App() {
 
       source.connect(monitorGain)
       monitorGain.connect(audioCtx.destination)
-
       monitorGainRef.current = monitorGain
 
       if (audioCtx.state === 'suspended') {
