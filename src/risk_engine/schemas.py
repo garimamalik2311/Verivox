@@ -36,6 +36,16 @@ class RiskResult(BaseModel):
     alert_triggered: bool
     alert_reason: str | None = None
 
+    # --- SIH Notification & Response Layer ---
+    notification_scenario: str = "routine_support"
+    notification_triggered: bool = False
+    notification_severity: str = "NONE"
+    notification_title: str | None = None
+    notification_message: str | None = None
+    recommended_actions: list[str] = Field(default_factory=list)
+    dispatch_channels: list[str] = Field(default_factory=list)
+    privacy_mode: str = "feature_only"
+
     model_version: str
 
     # --- Added by Person A (Sprint 1B: Features 1, 2, 3, 4) ---
