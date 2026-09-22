@@ -31,6 +31,35 @@ export default function ProsodyPage({ analytics, selected }) {
           <p className="text-2xl font-bold font-mono text-indigo-300 mt-2">{prosody.timing_variance ?? '--'}</p>
           <p className="text-xs text-slate-400 mt-1">Tracks pause frequency and duration anomalies.</p>
         </div>
+        <div className="rounded-xl border border-slate-800 bg-[#0c1017] p-5">
+          <p className="text-[10px] uppercase font-mono text-slate-500">YIN F0 Mean</p>
+          <p className="text-2xl font-bold font-mono text-cyan-300 mt-2">
+            {selected.yin_analysis?.f0_mean != null
+              ? `${Number(selected.yin_analysis.f0_mean).toFixed(1)} Hz`
+              : '--'}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">Auxiliary YIN fundamental-frequency estimate.</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-[#0c1017] p-5">
+          <p className="text-[10px] uppercase font-mono text-slate-500">YIN F0 Std Dev</p>
+          <p className="text-2xl font-bold font-mono text-indigo-300 mt-2">
+            {selected.yin_analysis?.f0_std != null
+              ? `${Number(selected.yin_analysis.f0_std).toFixed(1)} Hz`
+              : '--'}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">Pitch variability measured by the auxiliary YIN analyzer.</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-[#0c1017] p-5">
+          <p className="text-[10px] uppercase font-mono text-slate-500">YIN Voiced Ratio</p>
+          <p className="text-2xl font-bold font-mono text-cyan-300 mt-2">
+            {selected.yin_analysis?.voiced_ratio != null
+              ? `${(Number(selected.yin_analysis.voiced_ratio) * 100).toFixed(1)}%`
+              : '--'}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">Proportion of the window classified as voiced.</p>
+        </div>
       </div>
 
       {/* Educational & Detailed Breakdown */}

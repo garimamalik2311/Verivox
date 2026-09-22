@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from src.adversarial.router import router as adversarial_router
-from src.config import VAD_FRAME_SAMPLES
+from src.config import VAD_FRAME_SAMPLES, SAMPLE_RATE
 from src.features import extract_features
 from src.yin_analyzer import extract_yin_pitch_stats
 from src.risk_engine.schemas import ModelPrediction
@@ -1142,8 +1142,15 @@ async def audio_websocket_endpoint(
                     # Attach Sprint 1B diagnostics + notification telemetry
                     # --------------------------------------------------------
 
+                    yin_analysis = await asyncio.to_thread(
+                        extract_yin_pitch_stats,
+                        audio_window,
+                        sr=SAMPLE_RATE,
+                    )
+
                     result = result.model_copy(
                         update={
+                            "yin_analysis": yin_analysis,
                             "prosody_pitch_variance": (
                                 pitch_variance
                             ),
