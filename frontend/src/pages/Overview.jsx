@@ -184,6 +184,99 @@ export default function Overview({
         </section>
       )}
 
+      {selected.notification_triggered && (
+        <section className="rounded-2xl border border-verivox-pink/50 bg-verivox-pink/10 p-5 shadow-xl">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 shrink-0 text-verivox-pink">
+                <ShieldAlert size={22} className="animate-pulse" />
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-verivox-pink">
+                    SIH SECURITY RESPONSE
+                  </p>
+
+                  <span className="rounded-md border border-verivox-pink/40 bg-verivox-pink/10 px-2 py-0.5 text-[10px] font-mono font-bold text-verivox-pink">
+                    {selected.notification_severity || 'HIGH'}
+                  </span>
+                </div>
+
+                <h2 className="mt-2 text-base font-bold text-white">
+                  {selected.notification_title || 'Voice Impersonation Alert'}
+                </h2>
+
+                {selected.notification_message && (
+                  <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-300">
+                    {selected.notification_message}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="shrink-0 rounded-lg border border-verivox-border bg-black/30 px-3 py-2 text-[10px] font-mono text-slate-400">
+              <div>
+                Scenario:{' '}
+                <span className="text-white">
+                  {selected.notification_scenario || 'routine_support'}
+                </span>
+              </div>
+              <div className="mt-1">
+                Privacy:{' '}
+                <span className="text-verivox-cyan">
+                  {selected.privacy_mode || 'feature_only'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {Array.isArray(selected.recommended_actions) &&
+            selected.recommended_actions.length > 0 && (
+              <div className="mt-5 border-t border-verivox-pink/20 pt-4">
+                <p className="mb-3 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400">
+                  Recommended Response Actions
+                </p>
+
+                <div className="grid gap-2 md:grid-cols-2">
+                  {selected.recommended_actions.map((action, index) => (
+                    <div
+                      key={`${action}-${index}`}
+                      className="flex items-start gap-3 rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3"
+                    >
+                      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-verivox-pink/15 text-[10px] font-mono font-bold text-verivox-pink">
+                        {index + 1}
+                      </span>
+
+                      <span className="text-xs leading-5 text-slate-200">
+                        {action}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          {Array.isArray(selected.dispatch_channels) &&
+            selected.dispatch_channels.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-verivox-pink/20 pt-4">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
+                  Dispatch Channels
+                </span>
+
+                {selected.dispatch_channels.map((channel) => (
+                  <span
+                    key={channel}
+                    className="rounded-md border border-verivox-cyan/25 bg-verivox-cyan/10 px-2 py-1 text-[10px] font-mono text-verivox-cyan"
+                  >
+                    {channel}
+                  </span>
+                ))}
+              </div>
+            )}
+        </section>
+      )}
+
       <LiveGraph timeSeries={selected.timeSeries} inputMode={inputMode} selected={selected} activeStreamId={activeStreamId} />
 
       <section className="grid gap-4 sm:grid-cols-3">
