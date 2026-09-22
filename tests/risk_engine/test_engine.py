@@ -187,3 +187,40 @@ def test_single_high_prediction_does_not_trigger_high():
 
     assert result.risk_level != RiskLevel.HIGH
     assert result.alert_triggered is False
+
+
+def test_two_window_policy_triggers_after_two_flags():
+    engine = RiskEngine(
+        flag_threshold=0.80,
+        required_consecutive_flags=2,
+    )
+
+    results = [
+        engine.update(make_prediction(i, probability))
+        for i, probability in enumerate(
+            [0.82, 0.86],
+            start=1,
+        )
+    ]
+
+    assert results[0].alert_triggered is False
+    assert results[1].alert_triggered is True
+    assert results[1].risk_level == RiskLevel.HIGH
+
+
+def test_lower_policy_threshold_controls_flagging():
+    engine = RiskEngine(
+        flag_threshold=0.70,
+        required_consecutive_flags=2,
+    )
+
+    results = [
+        engine.update(make_prediction(i, probability))
+        for i, probability in enumerate(
+            [0.72, 0.74],
+            start=1,
+        )
+    ]
+
+    assert results[0].alert_triggered is False
+    assert results[1].alert_triggered is True

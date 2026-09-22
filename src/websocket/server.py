@@ -224,6 +224,11 @@ async def websocket_endpoint(
 
     await websocket.accept()
 
+    scenario = websocket.query_params.get(
+        "scenario",
+        "routine_support",
+    )
+
     connected_clients.add(websocket)
     client_stream_ids[websocket] = set()
 
@@ -275,6 +280,11 @@ async def websocket_endpoint(
             # ----------------------------------------------------------------
 
             if stream_id not in session_stream_ids:
+
+                stream_manager.configure_stream(
+                    stream_id,
+                    scenario,
+                )
 
                 session_stream_ids.add(stream_id)
 
@@ -1194,6 +1204,12 @@ async def audio_websocket_endpoint(
                             ),
                             "notification_triggered": (
                                 notification.triggered
+                            ),
+                            "notification_threshold": (
+                                notification.threshold
+                            ),
+                            "notification_required_consecutive_flags": (
+                                notification.required_consecutive_flags
                             ),
                             "notification_severity": (
                                 notification.severity

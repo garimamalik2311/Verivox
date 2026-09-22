@@ -231,6 +231,45 @@ export default function Overview({
             </div>
           </div>
 
+          <div className="mt-5 border-t border-verivox-pink/20 pt-4">
+            <p className="mb-3 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400">
+              Detection Policy
+            </p>
+
+            <div className="grid gap-2 md:grid-cols-3">
+              <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+                <p className="text-[10px] font-mono uppercase text-slate-500">
+                  AI Threshold
+                </p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {typeof selected.notification_threshold === 'number'
+                    ? `${(selected.notification_threshold * 100).toFixed(0)}%`
+                    : '—'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+                <p className="text-[10px] font-mono uppercase text-slate-500">
+                  Required Persistence
+                </p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {selected.notification_required_consecutive_flags || '—'} windows
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+                <p className="text-[10px] font-mono uppercase text-slate-500">
+                  Current Risk
+                </p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {typeof selected.rolling_score === 'number'
+                    ? `${(selected.rolling_score * 100).toFixed(1)}%`
+                    : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {Array.isArray(selected.recommended_actions) &&
             selected.recommended_actions.length > 0 && (
               <div className="mt-5 border-t border-verivox-pink/20 pt-4">

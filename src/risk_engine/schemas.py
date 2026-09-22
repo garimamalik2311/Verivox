@@ -39,6 +39,8 @@ class RiskResult(BaseModel):
     # --- SIH Notification & Response Layer ---
     notification_scenario: str = "routine_support"
     notification_triggered: bool = False
+    notification_threshold: float | None = None
+    notification_required_consecutive_flags: int | None = None
     notification_severity: str = "NONE"
     notification_title: str | None = None
     notification_message: str | None = None
