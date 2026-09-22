@@ -19,7 +19,7 @@ for filepath in glob.glob("data/raw/**/*.wav", recursive=True):
             engine = "Espeak"
         else:
             engine = "Commercial-Clone"
-            
+
         records.append({"filepath": filepath, "engine": engine})
 
 df = pd.DataFrame(records)

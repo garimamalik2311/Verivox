@@ -29,11 +29,22 @@ class RiskResult(BaseModel):
     ai_probability: float = Field(ge=0.0, le=1.0)
     rolling_score: float = Field(ge=0.0, le=1.0)
     consecutive_flags: int = Field(ge=0)
+    yin_analysis: dict | None = None
 
     risk_level: RiskLevel
 
     alert_triggered: bool
     alert_reason: str | None = None
+
+    # --- SIH Notification & Response Layer ---
+    notification_scenario: str = "routine_support"
+    notification_triggered: bool = False
+    notification_severity: str = "NONE"
+    notification_title: str | None = None
+    notification_message: str | None = None
+    recommended_actions: list[str] = Field(default_factory=list)
+    dispatch_channels: list[str] = Field(default_factory=list)
+    privacy_mode: str = "feature_only"
 
     model_version: str
 

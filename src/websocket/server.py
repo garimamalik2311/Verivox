@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from src.adversarial.router import router as adversarial_router
 from src.config import VAD_FRAME_SAMPLES
 from src.features import extract_features
+from src.yin_analyzer import extract_yin_pitch_stats
 from src.risk_engine.schemas import ModelPrediction
 from src.risk_engine.stream_manager import StreamManager
 from src.vad import VoiceActivityDetector
@@ -20,6 +21,7 @@ from src.window_accumulator import WindowAccumulator
 # --- Sprint 1B additions ---
 from src.risk_engine.prosody_buffer import ProsodyBuffer
 from src.risk_engine.shap_engine import ShapEngine
+from src.risk_engine.notification_engine import NotificationEngine
 from src.speaker_registry import (
     SpeakerRegistry,
     UnknownSpeakerError,
@@ -33,7 +35,10 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,6 +63,7 @@ model = joblib.load(MODEL_PATH)
 E2E_SLA_MS = 15.0
 
 shap_engine = ShapEngine()
+notification_engine = NotificationEngine()
 speaker_registry = SpeakerRegistry()
 speaker_verifier = SpeakerVerifier()
 
@@ -676,6 +682,11 @@ async def audio_websocket_endpoint(
         websocket
     )
 
+    scenario = websocket.query_params.get(
+        "scenario",
+        "routine_support",
+    )
+
     acquire_stream(stream_id)
 
     vad = VoiceActivityDetector()
@@ -940,6 +951,12 @@ async def audio_websocket_endpoint(
 
                         continue
 
+                    yin_analysis = await asyncio.to_thread(
+                        extract_yin_pitch_stats,
+                        audio_window,
+                        sr=SAMPLE_RATE,
+                    )
+
                     # --------------------------------------------------------
                     # SLA
                     # --------------------------------------------------------
@@ -1112,7 +1129,17 @@ async def audio_websocket_endpoint(
                         continue
 
                     # --------------------------------------------------------
-                    # Attach Sprint 1B diagnostics
+                    # SIH Notification & Response Layer
+                    # --------------------------------------------------------
+
+                    notification = notification_engine.evaluate(
+                        scenario=scenario,
+                        risk_score=result.rolling_score,
+                        alert_triggered=result.alert_triggered,
+                    )
+
+                    # --------------------------------------------------------
+                    # Attach Sprint 1B diagnostics + notification telemetry
                     # --------------------------------------------------------
 
                     result = result.model_copy(
@@ -1140,6 +1167,9 @@ async def audio_websocket_endpoint(
                                     "vocoder_flag"
                                 )
                             ),
+                            "yin_analysis": (
+                                yin_analysis
+                            ),
                             "diagnostic_cues": (
                                 shap_result.get(
                                     "diagnostic_cues",
@@ -1164,6 +1194,30 @@ async def audio_websocket_endpoint(
                             "sla_breach": (
                                 sla_breach
                             ),
+                            "notification_scenario": (
+                                notification.scenario
+                            ),
+                            "notification_triggered": (
+                                notification.triggered
+                            ),
+                            "notification_severity": (
+                                notification.severity
+                            ),
+                            "notification_title": (
+                                notification.title
+                            ),
+                            "notification_message": (
+                                notification.message
+                            ),
+                            "recommended_actions": (
+                                notification.recommended_actions
+                            ),
+                            "dispatch_channels": (
+                                notification.dispatch_channels
+                            ),
+                            "privacy_mode": (
+                                notification.privacy_mode
+                            ),
                         }
                     )
 
@@ -1182,7 +1236,9 @@ async def audio_websocket_endpoint(
                         f"alert={result.alert_triggered} "
                         f"cues={result.diagnostic_cues} "
                         f"inference={latency_ms:.2f}ms "
-                        f"sla_breach={sla_breach}"
+                        f"sla_breach={sla_breach} "
+                        f"notification={notification.triggered} "
+                        f"scenario={notification.scenario}"
                     )
 
                     # --------------------------------------------------------

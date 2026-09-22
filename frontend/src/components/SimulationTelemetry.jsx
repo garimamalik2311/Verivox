@@ -134,7 +134,7 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
         setStatusMessage(`Verified result simulated: ${selectedSample.expectedProb} (${selectedSample.expectedRisk})`)
         setIsTransmitting(false)
       }
-        
+
 
       // Safety timeout: Guarantee completion within 3 seconds
       timeoutId = setTimeout(() => {
@@ -175,7 +175,7 @@ export default function SimulationTelemetry({ activeStreamId = 'call_001', onRes
       ws.onerror = () => {
         clearTimeout(timeoutId)
         applyOfflineFallback()
-      }  
+      }
     } catch (err) {
       console.warn('Audio streaming exception, using verified benchmark payload:', err)
       stopPlaybackMeter()
