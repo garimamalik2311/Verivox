@@ -22,6 +22,9 @@ from src.window_accumulator import WindowAccumulator
 from src.risk_engine.prosody_buffer import ProsodyBuffer
 from src.risk_engine.shap_engine import ShapEngine
 from src.risk_engine.notification_engine import NotificationEngine
+from src.risk_engine.dispatch.base import DispatchMessage
+from src.risk_engine.dispatch.service import DispatchService
+from src.privacy_policy import assert_zero_retention
 from src.speaker_registry import (
     SpeakerRegistry,
     UnknownSpeakerError,
@@ -61,6 +64,7 @@ E2E_SLA_MS = 15.0
 
 shap_engine = ShapEngine()
 notification_engine = NotificationEngine()
+dispatch_service = DispatchService()
 speaker_registry = SpeakerRegistry()
 speaker_verifier = SpeakerVerifier()
 
@@ -679,6 +683,12 @@ async def audio_websocket_endpoint(
 
     await websocket.accept()
 
+    try:
+        assert_zero_retention()
+    except RuntimeError as exc:
+        await websocket.close(code=1011, reason=str(exc))
+        return
+
     stream_id = websocket.query_params.get(
         "stream_id",
         "browser_mic_001",
@@ -1139,6 +1149,25 @@ async def audio_websocket_endpoint(
                         alert_triggered=result.alert_triggered,
                     )
 
+                    dispatch_results = []
+
+                    if notification.triggered:
+                        dispatch_message = DispatchMessage(
+                            title=notification.title or "Security Alert",
+                            message=notification.message or "",
+                            scenario=notification.scenario,
+                            severity=notification.severity,
+                            recommended_actions=tuple(
+                                notification.recommended_actions
+                            ),
+                            privacy_mode=notification.privacy_mode,
+                        )
+
+                        dispatch_results = await dispatch_service.dispatch(
+                            dispatch_message,
+                            notification.dispatch_channels,
+                        )
+
                     # --------------------------------------------------------
                     # Attach Sprint 1B diagnostics + notification telemetry
                     # --------------------------------------------------------
@@ -1226,6 +1255,15 @@ async def audio_websocket_endpoint(
                             "dispatch_channels": (
                                 notification.dispatch_channels
                             ),
+                            "dispatch_results": [
+                                {
+                                    "channel": item.channel,
+                                    "attempted": item.attempted,
+                                    "delivered": item.delivered,
+                                    "detail": item.detail,
+                                }
+                                for item in dispatch_results
+                            ],
                             "privacy_mode": (
                                 notification.privacy_mode
                             ),
@@ -1313,6 +1351,20 @@ async def audio_websocket_endpoint(
         accumulator.reset()
 
         prosody_buffer.reset()
+
+        audio_remainder = np.empty(
+            0,
+            dtype=np.float32,
+        )
+        audio = np.empty(
+            0,
+            dtype=np.float32,
+        )
+        audio_bytes = b""
+        audio_window = np.empty(
+            0,
+            dtype=np.float32,
+        )
 
         release_stream(stream_id)
 

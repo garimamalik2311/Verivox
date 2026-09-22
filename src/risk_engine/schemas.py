@@ -46,6 +46,7 @@ class RiskResult(BaseModel):
     notification_message: str | None = None
     recommended_actions: list[str] = Field(default_factory=list)
     dispatch_channels: list[str] = Field(default_factory=list)
+    dispatch_results: list[dict] = Field(default_factory=list)
     privacy_mode: str = "feature_only"
 
     model_version: str

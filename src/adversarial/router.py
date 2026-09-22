@@ -22,6 +22,11 @@ router = APIRouter(prefix="/api/adversarial", tags=["adversarial"])
 # Cache for audio previews (UUID -> WAV bytes)
 _AUDIO_STORE: dict[str, bytes] = {}
 
+ALLOW_AUDIO_PREVIEW = (
+    os.getenv("VERIVOX_ALLOW_AUDIO_PREVIEW", "false").lower()
+    == "true"
+)
+
 # Model artifact path
 MODEL_PATH = "reports/xgboost_58d_calibrated.joblib"
 _MODEL = None
@@ -184,13 +189,21 @@ async def analyze_adversarial(
     clean_metrics = _run_model_inference(raw_audio, sr=sr)
     p_clean = clean_metrics["ai_probability"]
     clean_id = str(uuid.uuid4())
-    _AUDIO_STORE[clean_id] = _audio_to_wav_bytes(raw_audio, sr=sr)
+    if ALLOW_AUDIO_PREVIEW:
+        _AUDIO_STORE[clean_id] = _audio_to_wav_bytes(
+            raw_audio,
+            sr=sr,
+        )
 
     # 3. Apply Attack for selected intensity
     attacked_audio = apply_perturbation(raw_audio, attack_type=attack_type, intensity=intensity, sr=sr)
     attacked_metrics = _run_model_inference(attacked_audio, sr=sr)
     attacked_id = str(uuid.uuid4())
-    _AUDIO_STORE[attacked_id] = _audio_to_wav_bytes(attacked_audio, sr=sr)
+    if ALLOW_AUDIO_PREVIEW:
+        _AUDIO_STORE[attacked_id] = _audio_to_wav_bytes(
+            attacked_audio,
+            sr=sr,
+        )
 
     # 4. Apply Defense Purification for selected intensity
     if enable_defense:
@@ -216,7 +229,11 @@ async def analyze_adversarial(
             "alert_triggered": def_p >= 0.70,
         }
         defended_id = str(uuid.uuid4())
-        _AUDIO_STORE[defended_id] = _audio_to_wav_bytes(purified_audio, sr=sr)
+        if ALLOW_AUDIO_PREVIEW:
+            _AUDIO_STORE[defended_id] = _audio_to_wav_bytes(
+                purified_audio,
+                sr=sr,
+            )
     else:
         defended_metrics = attacked_metrics
         defense_telemetry = {"status": "DISABLED", "defense_applied": "None", "defense_latency_ms": 0.0}

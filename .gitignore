@@ -25,3 +25,7 @@ reports_baseline_test.log
 processed_v2.zip
 raw_audio.zip
 data_processed_v2_check/
+
+.env
+.env.*
+!.env.example

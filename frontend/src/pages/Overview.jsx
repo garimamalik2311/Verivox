@@ -18,7 +18,7 @@ export default function Overview({
       id: 'notif_1',
       type: selected.risk_level === 'HIGH' ? 'danger' : 'info',
       title: selected.risk_level === 'HIGH' ? 'Synthetic Clone Flagged' : 'Neural Guard Active',
-      message: selected.risk_level === 'HIGH' 
+      message: selected.risk_level === 'HIGH'
         ? `Stream ${activeStreamId} breached probability threshold (${Math.round((selected.ai_probability || 0) * 100)}%).`
         : `Monitoring stream ${activeStreamId} via WebSocket 16kHz PCM pipeline.`,
       time: 'Just now'
@@ -34,7 +34,7 @@ export default function Overview({
 
   return (
     <div className="space-y-8">
-      
+
       {/* =====================================================
           SECURITY NOTIFICATION BANNER / FEED
          ===================================================== */}
@@ -51,11 +51,11 @@ export default function Overview({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {securityNotifications.map((notif) => (
-            <div 
-              key={notif.id} 
+            <div
+              key={notif.id}
               className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
-                notif.type === 'danger' 
-                  ? 'border-verivox-pink/40 bg-verivox-pink/10 text-verivox-pink' 
+                notif.type === 'danger'
+                  ? 'border-verivox-pink/40 bg-verivox-pink/10 text-verivox-pink'
                   : notif.type === 'success'
                   ? 'border-verivox-cyan/30 bg-verivox-cyan/10 text-verivox-cyan'
                   : 'border-verivox-border bg-verivox-cardHover text-slate-300'
@@ -313,6 +313,57 @@ export default function Overview({
                 ))}
               </div>
             )}
+
+          {Array.isArray(selected.dispatch_results) &&
+            selected.dispatch_results.length > 0 && (
+              <div className="mt-4 border-t border-verivox-pink/20 pt-4">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
+                  Dispatch Status
+                </span>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {selected.dispatch_results.map((item) => {
+                    const status = item.delivered
+                      ? "DELIVERED"
+                      : item.attempted
+                        ? "FAILED"
+                        : "NOT SENT";
+
+                    const statusClass = item.delivered
+                      ? "text-emerald-400 border-emerald-400/25 bg-emerald-400/10"
+                      : item.attempted
+                        ? "text-verivox-pink border-verivox-pink/25 bg-verivox-pink/10"
+                        : "text-slate-400 border-slate-500/25 bg-slate-500/10";
+
+                    return (
+                      <div
+                        key={item.channel}
+                        className="rounded-lg border border-verivox-border bg-black/20 px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-mono uppercase text-slate-300">
+                            {item.channel}
+                          </span>
+
+                          <span
+                            className={`rounded-md border px-2 py-1 text-[9px] font-mono font-bold ${statusClass}`}
+                          >
+                            {status}
+                          </span>
+                        </div>
+
+                        {item.detail && (
+                          <p className="mt-1 text-[10px] font-mono text-slate-500">
+                            {item.detail}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
         </section>
       )}
 
