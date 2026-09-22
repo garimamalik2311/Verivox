@@ -39,12 +39,20 @@ class RiskResult(BaseModel):
     # --- SIH Notification & Response Layer ---
     notification_scenario: str = "routine_support"
     notification_triggered: bool = False
+    notification_threshold: float | None = None
+    notification_required_consecutive_flags: int | None = None
     notification_severity: str = "NONE"
     notification_title: str | None = None
     notification_message: str | None = None
     recommended_actions: list[str] = Field(default_factory=list)
     dispatch_channels: list[str] = Field(default_factory=list)
+    dispatch_results: list[dict] = Field(default_factory=list)
     privacy_mode: str = "feature_only"
+
+    # --- Scenario / transaction context ---
+    transaction_amount_inr: float | None = None
+    scenario_source: str = "default"
+    response_workflow_status: str = "INACTIVE"
 
     model_version: str
 

@@ -12,13 +12,13 @@ import AdversarialRobustness from './components/AdversarialRobustness'
 import SecurityReport from './pages/SecurityReport'
 
 // Utilities
-import { initialStreams, initialHistories, getAnalyticsData } from './utils/helpers'
+import { initialHistories, getAnalyticsData } from './utils/helpers'
 
 export default function App() {
   const [activePage, setActivePage] = useState('overview')
-  const [streams, setStreams] = useState(initialStreams)
+  const [streams, setStreams] = useState({})
   const [streamHistories, setStreamHistories] = useState(initialHistories)
-  const [activeStreamId, setActiveStreamId] = useState('call_001')
+  const [activeStreamId, setActiveStreamId] = useState(null)
   const [isConnected, setIsConnected] = useState(false)
   const [isBackendOnline, setIsBackendOnline] = useState(false)
   const [inputMode, setInputMode] = useState('mic')
@@ -27,6 +27,9 @@ export default function App() {
   const [micLevel, setMicLevel] = useState(0)
   const [showInspector, setShowInspector] = useState(false)
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false)
+  const [transactionAmountInr, setTransactionAmountInr] = useState('525000')
+  const [selectedScenario, setSelectedScenario] = useState('high_value_transaction')
+  const [contextConfigured, setContextConfigured] = useState(false)
 
   // Refs for WebSockets and Audio
   const monitorGainRef = useRef(null)
@@ -39,8 +42,10 @@ export default function App() {
   const fileIntervalRef = useRef(null)
   const fileStreamActiveRef = useRef(false)
   const securityTerminatedRef = useRef(false)
+  const transactionAmountRef = useRef('525000')
+  const selectedScenarioRef = useRef('high_value_transaction')
 
-  const selected = streams[activeStreamId] || streams.call_001 || {}
+  const selected = activeStreamId ? (streams[activeStreamId] || {}) : {}
   const analytics = getAnalyticsData(selected)
   const currentHistory = streamHistories[activeStreamId] || []
 
@@ -59,7 +64,8 @@ export default function App() {
       console.log('Risk WebSocket connected')
       setIsConnected(true)
       setIsBackendOnline(true)
-      setMicStatus('Connected / Ready')
+      setMicStatus('Select Security Context')
+      setContextConfigured(false)
     }
 
     ws.onclose = () => {
@@ -80,6 +86,27 @@ export default function App() {
       try {
         const data = JSON.parse(event.data)
         console.log('RiskResult:', data)
+
+        if (data.type === 'session_context_ack') {
+          console.log('Session context acknowledged:', data)
+
+          setStreams((prev) => ({
+            ...prev,
+            [data.stream_id]: {
+              ...(prev[data.stream_id] || {}),
+              stream_id: data.stream_id,
+              transaction_amount_inr: data.transaction_amount_inr,
+              notification_scenario: data.scenario,
+              scenario_source: data.scenario_source,
+              response_workflow_status: 'MONITORING'
+            }
+          }))
+
+          setActiveStreamId(data.stream_id)
+          setContextConfigured(true)
+          setMicStatus('Security Context Ready')
+          return
+        }
 
         if (data.alert_triggered === true) {
           console.warn('HIGH-RISK ALERT: HARD STOPPING FILE STREAM')
@@ -204,7 +231,52 @@ export default function App() {
   /* =========================================================
      MICROPHONE STREAM
      ========================================================= */
+  const configureSecurityContext = () => {
+    const ws = wsRef.current
+
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setMicStatus('Backend Connection Required')
+      return false
+    }
+
+    const rawAmount = String(transactionAmountRef.current).trim()
+    const parsedAmount = rawAmount === '' ? null : Number(rawAmount)
+    const scenario = selectedScenarioRef.current
+
+    if (
+      parsedAmount !== null &&
+      (!Number.isFinite(parsedAmount) || parsedAmount < 0)
+    ) {
+      setMicStatus('Invalid Transaction Amount')
+      return false
+    }
+
+    if (scenario === 'high_value_transaction' && parsedAmount === null) {
+      setMicStatus('Transaction Amount Required')
+      return false
+    }
+
+    const payload = {
+      type: 'session_context',
+      scenario: scenario === 'high_value_transaction' ? null : scenario,
+      transaction_amount_inr:
+        scenario === 'high_value_transaction' ? parsedAmount : null,
+    }
+
+    ws.send(JSON.stringify(payload))
+
+    console.log('Security context sent:', payload)
+    setMicStatus('Configuring Security Context...')
+
+    return true
+  }
+
   const startMicrophoneStream = async () => {
+    if (!contextConfigured) {
+      setMicStatus('Configure Security Context First')
+      return
+    }
+
     try {
       setInputMode('mic')
       setMicStatus('Connecting Mic...')
@@ -316,6 +388,12 @@ export default function App() {
   const handleFileUpload = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
+
+    if (!contextConfigured) {
+      setMicStatus('Configure Security Context First')
+      event.target.value = ''
+      return
+    }
 
     try {
       stopMicrophoneStream()
@@ -507,6 +585,18 @@ export default function App() {
               handleFileUpload={handleFileUpload}
               acknowledgeAlert={acknowledgeAlert}
               setActiveStreamId={setActiveStreamId}
+              transactionAmountInr={transactionAmountInr}
+              setTransactionAmountInr={(value) => {
+                setTransactionAmountInr(value)
+                transactionAmountRef.current = value
+              }}
+              selectedScenario={selectedScenario}
+              setSelectedScenario={(value) => {
+                setSelectedScenario(value)
+                selectedScenarioRef.current = value
+              }}
+              contextConfigured={contextConfigured}
+              configureSecurityContext={configureSecurityContext}
             />
           )}
           {activePage === 'adversarial' && (

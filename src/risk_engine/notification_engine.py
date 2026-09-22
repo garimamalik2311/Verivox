@@ -26,6 +26,7 @@ class Scenario(str, Enum):
 class NotificationPolicy:
     scenario: Scenario
     threshold: float
+    required_consecutive_flags: int
     title: str
     message: str
     recommended_actions: tuple[str, ...]
@@ -36,6 +37,7 @@ POLICIES: dict[Scenario, NotificationPolicy] = {
     Scenario.HIGH_VALUE_TRANSACTION: NotificationPolicy(
         scenario=Scenario.HIGH_VALUE_TRANSACTION,
         threshold=0.80,
+        required_consecutive_flags=2,
         title="High-Risk Voice Impersonation Detected",
         message=(
             "Synthetic or cloned voice risk has crossed the "
@@ -50,12 +52,14 @@ POLICIES: dict[Scenario, NotificationPolicy] = {
         dispatch_channels=(
             "dashboard",
             "sms",
+            "whatsapp",
             "webhook",
         ),
     ),
     Scenario.PRIVILEGED_ACCESS: NotificationPolicy(
         scenario=Scenario.PRIVILEGED_ACCESS,
         threshold=0.70,
+        required_consecutive_flags=3,
         title="Privileged Voice Authentication Warning",
         message=(
             "Voice impersonation risk is above the configured "
@@ -69,12 +73,14 @@ POLICIES: dict[Scenario, NotificationPolicy] = {
         dispatch_channels=(
             "dashboard",
             "sms",
+            "whatsapp",
             "webhook",
         ),
     ),
     Scenario.ROUTINE_SUPPORT: NotificationPolicy(
         scenario=Scenario.ROUTINE_SUPPORT,
         threshold=0.80,
+        required_consecutive_flags=3,
         title="Synthetic Voice Risk Detected",
         message=(
             "Voice authenticity risk has crossed the routine "
@@ -97,6 +103,7 @@ class NotificationDecision:
     triggered: bool
     severity: str
     threshold: float
+    required_consecutive_flags: int
     title: str | None
     message: str | None
     recommended_actions: list[str]
@@ -131,6 +138,7 @@ class NotificationEngine:
                 triggered=True,
                 severity=severity,
                 threshold=policy.threshold,
+                required_consecutive_flags=policy.required_consecutive_flags,
                 title=policy.title,
                 message=policy.message,
                 recommended_actions=list(
@@ -146,6 +154,7 @@ class NotificationEngine:
             triggered=False,
             severity="NONE",
             threshold=policy.threshold,
+            required_consecutive_flags=policy.required_consecutive_flags,
             title=None,
             message=None,
             recommended_actions=[],

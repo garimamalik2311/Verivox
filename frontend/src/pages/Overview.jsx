@@ -10,7 +10,10 @@ export default function Overview({
   micStatus, inputMode, micLevel, isLiveMonitoring, selected, activeStreamId,
   securityTerminated, showInspector, summary, streams,
   startMicrophoneStream, stopMicrophoneStream, toggleLiveMonitor, handleFileUpload,
-  acknowledgeAlert, setActiveStreamId
+  acknowledgeAlert, setActiveStreamId,
+  transactionAmountInr, setTransactionAmountInr,
+  selectedScenario, setSelectedScenario,
+  contextConfigured, configureSecurityContext
 }) {
   // Generate dynamic security notification items based on current stream states
   const securityNotifications = [
@@ -18,7 +21,7 @@ export default function Overview({
       id: 'notif_1',
       type: selected.risk_level === 'HIGH' ? 'danger' : 'info',
       title: selected.risk_level === 'HIGH' ? 'Synthetic Clone Flagged' : 'Neural Guard Active',
-      message: selected.risk_level === 'HIGH' 
+      message: selected.risk_level === 'HIGH'
         ? `Stream ${activeStreamId} breached probability threshold (${Math.round((selected.ai_probability || 0) * 100)}%).`
         : `Monitoring stream ${activeStreamId} via WebSocket 16kHz PCM pipeline.`,
       time: 'Just now'
@@ -34,7 +37,7 @@ export default function Overview({
 
   return (
     <div className="space-y-8">
-      
+
       {/* =====================================================
           SECURITY NOTIFICATION BANNER / FEED
          ===================================================== */}
@@ -51,11 +54,11 @@ export default function Overview({
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {securityNotifications.map((notif) => (
-            <div 
-              key={notif.id} 
+            <div
+              key={notif.id}
               className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
-                notif.type === 'danger' 
-                  ? 'border-verivox-pink/40 bg-verivox-pink/10 text-verivox-pink' 
+                notif.type === 'danger'
+                  ? 'border-verivox-pink/40 bg-verivox-pink/10 text-verivox-pink'
                   : notif.type === 'success'
                   ? 'border-verivox-cyan/30 bg-verivox-cyan/10 text-verivox-cyan'
                   : 'border-verivox-border bg-verivox-cardHover text-slate-300'
@@ -184,6 +187,132 @@ export default function Overview({
         </section>
       )}
 
+      {/* =====================================================
+          DEMO SECURITY CONTEXT / SCENARIO RESOLUTION
+         ===================================================== */}
+      <section className="rounded-2xl border border-verivox-cyan/20 bg-verivox-dark p-5 shadow-xl">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] font-mono font-bold uppercase tracking-widest text-verivox-cyan">
+                Security Context
+              </p>
+              <span className="rounded-full border border-verivox-cyan/30 bg-verivox-cyan/10 px-2 py-0.5 text-[9px] font-mono font-bold uppercase tracking-wider text-verivox-cyan">
+                Demo · Simulated
+              </span>
+            </div>
+            <p className="mt-1 max-w-2xl text-xs text-slate-400">
+              Select the security scenario before voice analysis. Audio remains the live detector input;
+              this context simulates the transaction or access workflow used by the risk engine.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={configureSecurityContext}
+            disabled={contextConfigured || isLiveMonitoring || securityTerminated}
+            className="rounded-xl border border-verivox-cyan/40 bg-verivox-cyan/10 px-4 py-2.5 text-[10px] font-mono font-bold uppercase tracking-widest text-verivox-cyan transition hover:bg-verivox-cyan/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {contextConfigured ? 'Context Applied' : 'Apply Security Context'}
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-[10px] font-mono uppercase tracking-widest text-slate-500">
+              Security Scenario
+            </label>
+
+            <select
+              value={selectedScenario}
+              onChange={(event) => setSelectedScenario(event.target.value)}
+              disabled={contextConfigured || isLiveMonitoring || securityTerminated}
+              className="w-full rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-2.5 text-sm font-mono text-white outline-none disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="high_value_transaction">
+                High-Value Transaction
+              </option>
+              <option value="privileged_access">
+                Privileged Access
+              </option>
+              <option value="routine_support">
+                Routine Support
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-[10px] font-mono uppercase tracking-widest text-slate-500">
+              Transaction Amount · INR
+            </label>
+
+            <div className="flex items-center rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3">
+              <span className="mr-2 text-sm font-mono text-verivox-cyan">₹</span>
+              <input
+                type="number"
+                min="0"
+                step="1000"
+                value={transactionAmountInr}
+                onChange={(event) => setTransactionAmountInr(event.target.value)}
+                disabled={
+                  selectedScenario !== 'high_value_transaction' ||
+                  contextConfigured ||
+                  isLiveMonitoring ||
+                  securityTerminated
+                }
+                placeholder="e.g. 525000"
+                className="w-full bg-transparent py-2.5 text-sm font-mono text-white outline-none placeholder:text-slate-600 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 md:grid-cols-4">
+          <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+            <p className="text-[10px] font-mono uppercase text-slate-500">Amount</p>
+            <p className="mt-1 text-sm font-bold text-white">
+              {selected.transaction_amount_inr !== null &&
+              selected.transaction_amount_inr !== undefined
+                ? `₹${Number(selected.transaction_amount_inr).toLocaleString('en-IN')}`
+                : selectedScenario === 'high_value_transaction' && transactionAmountInr
+                  ? `₹${Number(transactionAmountInr).toLocaleString('en-IN')}`
+                  : 'Not applicable'}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+            <p className="text-[10px] font-mono uppercase text-slate-500">Resolved Scenario</p>
+            <p className="mt-1 text-sm font-bold capitalize text-white">
+              {(selected.notification_scenario || 'Not configured').replaceAll('_', ' ')}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+            <p className="text-[10px] font-mono uppercase text-slate-500">Resolution</p>
+            <p className="mt-1 text-sm font-bold text-verivox-cyan">
+              {selected.scenario_source === 'transaction_amount'
+                ? 'AUTO · AMOUNT'
+                : selected.scenario_source === 'explicit'
+                  ? 'EXPLICIT'
+                  : selected.notification_scenario
+                    ? 'DEFAULT'
+                    : 'PENDING'}
+            </p>
+          </div>
+
+          <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+            <p className="text-[10px] font-mono uppercase text-slate-500">Workflow</p>
+            <p className={`mt-1 text-sm font-bold ${
+              selected.response_workflow_status === 'TRIGGERED'
+                ? 'text-verivox-pink'
+                : 'text-verivox-cyan'
+            }`}>
+              {selected.response_workflow_status || 'CONTEXT PENDING'}
+            </p>
+          </div>
+        </div>
+      </section>
+
       {selected.notification_triggered && (
         <section className="rounded-2xl border border-verivox-pink/50 bg-verivox-pink/10 p-5 shadow-xl">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -231,6 +360,45 @@ export default function Overview({
             </div>
           </div>
 
+          <div className="mt-5 border-t border-verivox-pink/20 pt-4">
+            <p className="mb-3 text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400">
+              Detection Policy
+            </p>
+
+            <div className="grid gap-2 md:grid-cols-3">
+              <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+                <p className="text-[10px] font-mono uppercase text-slate-500">
+                  AI Threshold
+                </p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {typeof selected.notification_threshold === 'number'
+                    ? `${(selected.notification_threshold * 100).toFixed(0)}%`
+                    : '—'}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+                <p className="text-[10px] font-mono uppercase text-slate-500">
+                  Required Persistence
+                </p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {selected.notification_required_consecutive_flags || '—'} windows
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-verivox-border bg-verivox-darkest/70 px-3 py-3">
+                <p className="text-[10px] font-mono uppercase text-slate-500">
+                  Current Risk
+                </p>
+                <p className="mt-1 text-sm font-bold text-white">
+                  {typeof selected.rolling_score === 'number'
+                    ? `${(selected.rolling_score * 100).toFixed(1)}%`
+                    : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
           {Array.isArray(selected.recommended_actions) &&
             selected.recommended_actions.length > 0 && (
               <div className="mt-5 border-t border-verivox-pink/20 pt-4">
@@ -274,6 +442,69 @@ export default function Overview({
                 ))}
               </div>
             )}
+
+          {Array.isArray(selected.dispatch_results) &&
+            selected.dispatch_results.length > 0 && (
+              <div className="mt-4 border-t border-verivox-pink/20 pt-4">
+                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-500">
+                  Dispatch Status
+                </span>
+
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {selected.dispatch_results.map((item) => {
+                    const providerStatus = String(
+                      item.provider_status || ""
+                    ).toLowerCase();
+
+                    const status = item.delivered
+                      ? "DELIVERED"
+                      : providerStatus
+                        ? providerStatus.toUpperCase()
+                        : item.attempted
+                          ? "SENT"
+                          : "NOT SENT";
+
+                    const failed =
+                      providerStatus === "failed" ||
+                      providerStatus === "undelivered";
+
+                    const statusClass = item.delivered
+                      ? "text-emerald-400 border-emerald-400/25 bg-emerald-400/10"
+                      : failed
+                        ? "text-verivox-pink border-verivox-pink/25 bg-verivox-pink/10"
+                        : providerStatus
+                          ? "text-verivox-cyan border-verivox-cyan/25 bg-verivox-cyan/10"
+                          : "text-slate-400 border-slate-500/25 bg-slate-500/10";
+
+                    return (
+                      <div
+                        key={item.channel}
+                        className="rounded-lg border border-verivox-border bg-black/20 px-3 py-2"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-mono uppercase text-slate-300">
+                            {item.channel}
+                          </span>
+
+                          <span
+                            className={`rounded-md border px-2 py-1 text-[9px] font-mono font-bold ${statusClass}`}
+                          >
+                            {status}
+                          </span>
+                        </div>
+
+                        {item.detail && (
+                          <p className="mt-1 text-[10px] font-mono text-slate-500">
+                            {item.detail}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
         </section>
       )}
 
@@ -309,15 +540,42 @@ export default function Overview({
               return (
                 <button key={id} onClick={() => setActiveStreamId(id)} className={`w-full rounded-xl border p-4 text-left transition ${activeStreamId === id ? 'border-verivox-cyan/60 bg-verivox-cyan/10' : 'border-verivox-border bg-verivox-cardHover/60 hover:border-slate-700 hover:bg-verivox-cardHover'}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-bold text-sm text-white">{stream.name || id}</p>
                       <p className="mt-1 font-mono text-[11px] text-slate-400">{id}</p>
                     </div>
                     <StatusPill status={stream.risk_level} />
                   </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-verivox-cyan/30 bg-verivox-cyan/10 px-2.5 py-1 text-[9px] font-mono font-bold uppercase tracking-wider text-verivox-cyan">
+                      {stream.notification_scenario
+                        ? stream.notification_scenario.replaceAll('_', ' ')
+                        : 'Context pending'}
+                    </span>
+
+                    {stream.scenario_source && (
+                      <span className="rounded-full border border-verivox-border bg-verivox-darkest/60 px-2.5 py-1 text-[9px] font-mono uppercase tracking-wider text-slate-500">
+                        {stream.scenario_source === 'transaction_amount'
+                          ? 'Auto · Amount'
+                          : stream.scenario_source === 'explicit'
+                            ? 'Explicit'
+                            : 'Default'}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
-                    <span>{stream.speech_detected === true ? 'Speech active' : stream.speech_detected === false ? 'Silence' : 'Waiting for backend'}</span>
-                    <span className="font-mono text-verivox-cyan font-semibold">Score {formatScore(stream.rolling_score, 2)}</span>
+                    <span>
+                      {stream.speech_detected === true
+                        ? 'Speech active'
+                        : stream.speech_detected === false
+                          ? 'Silence'
+                          : 'Waiting for backend'}
+                    </span>
+                    <span className="font-mono text-verivox-cyan font-semibold">
+                      Score {formatScore(stream.rolling_score, 2)}
+                    </span>
                   </div>
                 </button>
               )
