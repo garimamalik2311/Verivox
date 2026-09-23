@@ -63,34 +63,48 @@ export default function App() {
      WEBSOCKET CONNECTION
      ========================================================= */
   useEffect(() => {
-    const streamId = uniqueStreamIdRef.current
-    const wsUrl =
-      import.meta.env.VITE_RISK_WS_URL ||
-      `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
+    let isUnmounted = false
+    let reconnectTimeout = null
 
-    console.log('Connecting Risk WebSocket:', wsUrl)
+    const connect = () => {
+      if (isUnmounted) return
 
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
+      const streamId = uniqueStreamIdRef.current
+      const wsUrl =
+        import.meta.env.VITE_RISK_WS_URL ||
+        `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
 
-    ws.onopen = () => {
-      console.log('Risk WebSocket connected')
-      setIsConnected(true)
-      setIsBackendOnline(true)
-      setMicStatus('Select Security Context')
-      setContextConfigured(false)
-    }
+      console.log('Connecting Risk WebSocket:', wsUrl)
 
-    ws.onclose = () => {
-      console.log('Risk WebSocket closed')
-      setIsConnected(false)
-      setIsBackendOnline(securityTerminatedRef.current)
-      setMicStatus(
-        securityTerminatedRef.current
-          ? 'STREAM TERMINATED — SECURITY ALERT'
-          : 'Disconnected'
-      )
-    }
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        console.log('Risk WebSocket connected')
+        setIsConnected(true)
+        setIsBackendOnline(true)
+        setMicStatus('Select Security Context')
+        setContextConfigured(false)
+      }
+
+      ws.onclose = () => {
+        console.log('Risk WebSocket closed')
+        setIsConnected(false)
+        setIsBackendOnline(securityTerminatedRef.current)
+        setMicStatus(
+          securityTerminatedRef.current
+            ? 'STREAM TERMINATED — SECURITY ALERT'
+            : 'Disconnected'
+        )
+
+        // Automatically attempt reconnection if not security-terminated
+        if (!isUnmounted && !securityTerminatedRef.current) {
+          reconnectTimeout = setTimeout(() => {
+            console.log('Attempting WebSocket reconnect...')
+            connect()
+          }, 2000)
+        }
+      }
 
     ws.onerror = (error) => {
       console.error('Risk WebSocket error:', error)
@@ -215,19 +229,25 @@ export default function App() {
       }
     }
 
+    }
+
+    connect()
+
     return () => {
+      isUnmounted = true
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
       if (
-        ws.readyState === WebSocket.CONNECTING ||
-        ws.readyState === WebSocket.OPEN
+        wsRef.current &&
+        (wsRef.current.readyState === WebSocket.CONNECTING ||
+          wsRef.current.readyState === WebSocket.OPEN)
       ) {
-        console.log('Cleaning up Risk WebSocket:', wsUrl)
-        ws.close()
+        console.log('Cleaning up Risk WebSocket')
+        wsRef.current.close()
       }
 
-      if (wsRef.current === ws) {
-        wsRef.current = null
-      }
-
+      wsRef.current = null
       stopMicrophoneStream()
     }
   }, [])
@@ -584,7 +604,7 @@ export default function App() {
               offset + chunkSize
             )
 
-          ws.send(chunk.buffer)
+          ws.send(chunk)
 
           const chunkRms =
             calculateRMS(

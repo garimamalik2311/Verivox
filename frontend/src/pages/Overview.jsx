@@ -16,7 +16,8 @@ import {
   Waves,
   Bell,
   ShieldAlert,
-  CheckCircle2
+  CheckCircle2,
+  Cpu
 } from 'lucide-react'
 
 import AudioPlaybackBar from '../components/AudioPlaybackBar'
@@ -1203,87 +1204,97 @@ export default function Overview({
 
           </div>
 
-          <div className="relative grid gap-4 sm:grid-cols-2">
+          <div className="relative grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 
-            {/* RISK SCORE */}
-
+            {/* 1. ROLLING RISK SCORE (Driven by Ensemble) */}
             <div className="rounded-xl border border-cyan-300/15 bg-[#030712]/60 p-5 transition hover:border-cyan-300/30">
-
               <div className="flex items-center gap-2 text-[13px] font-bold text-slate-300">
-
-                <Gauge
-                  size={17}
-                  className="text-cyan-200"
-                />
-
-                Rolling Risk Score
-
+                <Gauge size={17} className="text-cyan-200" />
+                Rolling Risk Score (Ensemble)
               </div>
-
               <p className="mt-3 text-4xl font-black font-mono text-white">
-                {formatScore(
-                  selected.rolling_score,
-                  3
-                )}
+                {formatScore(selected.rolling_score, 3)}
               </p>
-
               <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-cyan-300 via-violet-400 to-fuchsia-400 shadow-[0_0_14px_rgba(34,211,238,0.5)] transition-all duration-500"
                   style={{
                     width:
-                      selected.rolling_score !==
-                        undefined &&
-                      selected.rolling_score !== null
-                        ? `${Math.min(
-                            Math.max(
-                              Number(
-                                selected.rolling_score
-                              ) * 100,
-                              0
-                            ),
-                            100
-                          )}%`
+                      selected.rolling_score !== undefined && selected.rolling_score !== null
+                        ? `${Math.min(Math.max(Number(selected.rolling_score) * 100, 0), 100)}%`
                         : '0%'
                   }}
                 />
-
               </div>
-
               <p className="mt-3 text-xs leading-5 text-slate-400">
-                Displayed directly from the backend rolling risk engine.
+                Unified ensemble: Calibrated XGBoost & Dual-Stream MMS-300M.
               </p>
-
             </div>
 
-
-            {/* FEATURE LATENCY */}
-
+            {/* 2. DUAL-MODEL ENSEMBLE BREAKDOWN */}
             <div className="rounded-xl border border-violet-300/15 bg-[#030712]/60 p-5 transition hover:border-violet-300/30">
-
-              <div className="flex items-center gap-2 text-[13px] font-bold text-slate-300">
-
-                <Waves
-                  size={17}
-                  className="text-violet-200"
-                />
-
-                Feature Latency
-
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-[13px] font-bold text-slate-300">
+                  <Cpu size={17} className="text-violet-200" />
+                  Model Agreement
+                </div>
+                {selected.xgb_probability !== undefined && selected.dual_stream_probability !== undefined && (
+                  <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                    Math.abs(selected.xgb_probability - selected.dual_stream_probability) < 0.25
+                      ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300'
+                      : 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+                  }`}>
+                    {Math.abs(selected.xgb_probability - selected.dual_stream_probability) < 0.25
+                      ? 'HIGH AGREEMENT'
+                      : 'DIVERGENT'}
+                  </span>
+                )}
               </div>
 
+              <div className="mt-3 space-y-2.5 font-mono text-xs">
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="text-[11px] text-slate-400">XGBoost (58-D DSP):</span>
+                  <span className="font-bold text-cyan-200">
+                    {selected.xgb_probability !== undefined && selected.xgb_probability !== null
+                      ? `${(selected.xgb_probability * 100).toFixed(1)}%`
+                      : typeof selected.ai_probability === 'number'
+                        ? `${(selected.ai_probability * 100).toFixed(1)}%`
+                        : '--'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-slate-300">
+                  <span className="text-[11px] text-slate-400">Dual Neural (MMS-300M):</span>
+                  <span className="font-bold text-violet-200">
+                    {selected.dual_stream_probability !== undefined && selected.dual_stream_probability !== null
+                      ? `${(selected.dual_stream_probability * 100).toFixed(1)}%`
+                      : '--'}
+                  </span>
+                </div>
+                {selected.modality_gate_alpha !== undefined && selected.modality_gate_alpha !== null && (
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-white/5">
+                    <span>Modality Gate (α):</span>
+                    <span>{Number(selected.modality_gate_alpha).toFixed(3)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 3. FEATURE & PIPELINE LATENCY */}
+            <div className="rounded-xl border border-violet-300/15 bg-[#030712]/60 p-5 transition hover:border-violet-300/30">
+              <div className="flex items-center gap-2 text-[13px] font-bold text-slate-300">
+                <Waves size={17} className="text-violet-200" />
+                Pipeline Latency
+              </div>
               <p className="mt-3 text-xl font-black font-mono text-white">
-                {selected.feature_latency_ms !==
-                undefined
-                  ? `${selected.feature_latency_ms} ms`
-                  : '--'}
+                {selected.latency_ms !== undefined && selected.latency_ms !== null
+                  ? `${selected.latency_ms} ms`
+                  : selected.feature_latency_ms !== undefined
+                    ? `${selected.feature_latency_ms} ms`
+                    : '--'}
               </p>
-
               <p className="mt-2 text-xs leading-5 text-slate-400">
-                58-dimensional feature vector processed by the backend pipeline.
+                Real-time synchronized dual-model inference latency.
               </p>
-
             </div>
 
           </div>

@@ -78,13 +78,18 @@ class DualStreamFusionClassifier:
         self._load_artifacts()
 
     def _load_artifacts(self):
-        if not os.path.exists(self.MODEL_PATH) or not os.path.exists(self.SCALER_PATH):
-            print(f"[AcousticModel] Warning: Model weights not found at {self.MODEL_PATH}")
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        model_path = self.MODEL_PATH if os.path.exists(self.MODEL_PATH) else os.path.join(base_dir, self.MODEL_PATH)
+        scaler_path = self.SCALER_PATH if os.path.exists(self.SCALER_PATH) else os.path.join(base_dir, self.SCALER_PATH)
+        config_path = self.CONFIG_PATH if os.path.exists(self.CONFIG_PATH) else os.path.join(base_dir, self.CONFIG_PATH)
+
+        if not os.path.exists(model_path) or not os.path.exists(scaler_path):
+            print(f"[AcousticModel] Warning: Model weights not found at {model_path}")
             return
 
         # 1. Load config
-        if os.path.exists(self.CONFIG_PATH):
-            with open(self.CONFIG_PATH, "r", encoding="utf-8") as f:
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
                 self.config = json.load(f)
 
         ssl_dim = self.config.get("ssl_dim", 1024)
@@ -92,11 +97,11 @@ class DualStreamFusionClassifier:
         proj_dim = self.config.get("proj_dim", 128)
 
         # 2. Load DSP StandardScaler
-        self.scaler = joblib.load(self.SCALER_PATH)
+        self.scaler = joblib.load(scaler_path)
 
         # 3. Load PyTorch model weights
         self.model = GatedDualStreamFusion(ssl_dim=ssl_dim, dsp_dim=dsp_dim, proj_dim=proj_dim)
-        state_dict = torch.load(self.MODEL_PATH, map_location=self.device)
+        state_dict = torch.load(model_path, map_location=self.device)
         self.model.load_state_dict(state_dict)
         self.model.to(self.device)
         self.model.eval()

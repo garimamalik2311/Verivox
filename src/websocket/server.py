@@ -694,6 +694,20 @@ def process_audio_window(
 
 
 # ============================================================================
+# STARTUP WARM-UP PASS
+#
+# Eliminates cold-start latency on window=1 by pre-compiling librosa FFT kernels,
+# Mel filterbanks, Chroma matrices, and XGBoost internal buffers at startup.
+# ============================================================================
+try:
+    _warmup_samples = np.zeros(16000, dtype=np.float32)
+    _, _warmup_lat, _ = process_audio_window(_warmup_samples)
+    print(f"[model] Acoustic pipeline warm-up finished ({_warmup_lat:.1f}ms) — ready for <{E2E_SLA_MS}ms SLA.")
+except Exception as _warmup_exc:
+    print(f"[model] Startup warm-up deferred: {_warmup_exc}")
+
+
+# ============================================================================
 # LIVE AUDIO WEBSOCKET
 # ============================================================================
 
@@ -1265,11 +1279,11 @@ async def audio_websocket_endpoint(
                             "shap_features": [],
                         }
                         
-                                            # --------------------------------------------------------
-                    # Feature 5: Dual-Stream Trilingual Neural Verification
+                    # --------------------------------------------------------
+                    # Feature 5: Dual-Stream Trilingual Neural Inference
                     # --------------------------------------------------------
                     dual_stream_res = None
-                    if dual_stream_classifier is not None and (ai_probability >= 0.40 or window_id % 4 == 0):
+                    if dual_stream_classifier is not None:
                         try:
                             dual_stream_res = await asyncio.to_thread(
                                 dual_stream_classifier.predict,
@@ -1280,15 +1294,27 @@ async def audio_websocket_endpoint(
                             print(f"[dual-stream] Inference failed for window={window_id}: {exc}")
 
                     # --------------------------------------------------------
-                    # Canonical ModelPrediction
+                    # Combined Ensemble Probability (XGBoost + Dual Neural)
                     # --------------------------------------------------------
+                    xgb_prob = ai_probability
+                    if dual_stream_res is not None and "ai_probability" in dual_stream_res:
+                        dual_prob = float(dual_stream_res["ai_probability"])
+                        ensemble_prob = float(
+                            np.clip(0.5 * xgb_prob + 0.5 * dual_prob, 0.0, 1.0)
+                        )
+                    else:
+                        dual_prob = None
+                        ensemble_prob = xgb_prob
 
+                    # --------------------------------------------------------
+                    # Canonical ModelPrediction (Driven by Ensemble)
+                    # --------------------------------------------------------
                     prediction = ModelPrediction(
                         stream_id=stream_id,
                         window_id=window_id,
                         timestamp=window_timestamp,
-                        ai_probability=ai_probability,
-                        model_version=MODEL_VERSION,
+                        ai_probability=ensemble_prob,
+                        model_version="ensemble-xgb-mms300m-v1",
                     )
 
                     # --------------------------------------------------------
@@ -1361,27 +1387,29 @@ async def audio_websocket_endpoint(
 
                     result = result.model_copy(
                         update={
+                                "xgb_probability": round(xgb_prob, 4),
                                 "dual_stream_probability": (
-                                dual_stream_res.get("ai_probability")
-                                if dual_stream_res
-                                else None
-                            ),
-                            "dual_stream_risk": (
-                                dual_stream_res.get("risk_level")
-                                if dual_stream_res
-                                else None
-                            ),
-                            "modality_gate_alpha": (
-                                dual_stream_res.get("modality_gate_alpha")
-                                if dual_stream_res
-                                else 0.64
-                            ),
-                            "dual_stream_latency_ms": (
-                                dual_stream_res.get("latency_ms")
-                                if dual_stream_res
-                                else None
-                            ),
-                            "target_languages": ["en", "hi", "ta"],
+                                    round(dual_prob, 4)
+                                    if dual_prob is not None
+                                    else None
+                                ),
+                                "dual_stream_risk": (
+                                    dual_stream_res.get("risk_level")
+                                    if dual_stream_res
+                                    else None
+                                ),
+                                "modality_gate_alpha": (
+                                    dual_stream_res.get("modality_gate_alpha")
+                                    if dual_stream_res
+                                    else 0.64
+                                ),
+                                "dual_stream_latency_ms": (
+                                    dual_stream_res.get("latency_ms")
+                                    if dual_stream_res
+                                    else None
+                                ),
+                                "target_languages": ["en", "hi", "ta"],
+                                "ensemble_mode": "xgb_mms300m_fusion",
                             
                         
                             "yin_analysis": yin_analysis,
@@ -1500,7 +1528,7 @@ async def audio_websocket_endpoint(
                         f"[audio] "
                         f"stream={stream_id} "
                         f"window={window_id} "
-                        f"AI={ai_probability:.3f} "
+                        f"AI_ens={ensemble_prob:.3f} (xgb={xgb_prob:.3f}, dual={dual_prob if dual_prob is not None else 0.0:.3f}) "
                         f"rolling={result.rolling_score:.3f} "
                         f"flags={result.consecutive_flags} "
                         f"risk={result.risk_level.value} "

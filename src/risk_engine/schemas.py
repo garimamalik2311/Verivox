@@ -85,9 +85,11 @@ class RiskResult(BaseModel):
     latency_ms: float | None = None
     sla_breach: bool = False
 
-    # --- Dual-Stream Neural Acoustic Fusion (MMS-300M + 58-D DSP) ---
+    # --- Dual-Stream Neural Acoustic Fusion (MMS-300M + 58-D DSP) & Ensemble ---
+    xgb_probability: float | None = None
     dual_stream_probability: float | None = None
     dual_stream_risk: str | None = None
     modality_gate_alpha: float | None = None
     dual_stream_latency_ms: float | None = None
     target_languages: list[str] = Field(default_factory=lambda: ["en", "hi", "ta"])
+    ensemble_mode: str = "xgb_mms300m_fusion"
