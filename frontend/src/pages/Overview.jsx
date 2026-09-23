@@ -1,4 +1,3 @@
-
 'use client'
 
 import {
@@ -223,191 +222,162 @@ export default function Overview({
 
 
       {/* =====================================================
-          VOICE INGESTION
+          VOICE INGESTION & SPECTROGRAM SPLIT
       ===================================================== */}
+      
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
 
-      <section className="relative overflow-hidden rounded-2xl border border-cyan-300/25 bg-[#07111f]/75 p-5 shadow-[0_0_45px_rgba(34,211,238,0.07)] backdrop-blur-xl">
+        {/* VOICE INGESTION (Original Section) */}
+        <section className="relative overflow-hidden flex flex-col justify-center rounded-2xl border border-cyan-300/25 bg-[#07111f]/75 p-5 shadow-[0_0_45px_rgba(34,211,238,0.07)] backdrop-blur-xl">
 
-        <div className="pointer-events-none absolute -right-6 -top-6 opacity-[0.09]">
+          <div className="pointer-events-none absolute -right-6 -top-6 opacity-[0.09]">
+            <RadioTower
+              size={150}
+              className="text-cyan-300"
+            />
+          </div>
 
-          <RadioTower
-            size={150}
-            className="text-cyan-300"
-          />
+          <div className="relative mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+            <div className="flex items-center gap-3">
+              <div
+                className={`flex size-11 items-center justify-center rounded-xl border ${
+                  micStatus === 'Live Mic Streaming...'
+                    ? 'animate-pulse border-cyan-300/60 bg-cyan-400/15 text-cyan-200 shadow-[0_0_28px_rgba(34,211,238,0.25)]'
+                    : 'border-cyan-300/30 bg-cyan-400/[0.08] text-cyan-200'
+                }`}
+              >
+                <Mic size={20} />
+              </div>
 
-        </div>
-
-        <div className="relative mb-5 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-
-          <div className="flex items-center gap-3">
-
-            <div
-              className={`flex size-11 items-center justify-center rounded-xl border ${
-                micStatus === 'Live Mic Streaming...'
-                  ? 'animate-pulse border-cyan-300/60 bg-cyan-400/15 text-cyan-200 shadow-[0_0_28px_rgba(34,211,238,0.25)]'
-                  : 'border-cyan-300/30 bg-cyan-400/[0.08] text-cyan-200'
-              }`}
-            >
-              <Mic size={20} />
+              <div>
+                <h2 className="flex flex-wrap items-center gap-2 text-[15px] font-bold text-white">
+                  Live Voice Ingestion
+                  <span className="rounded-full border border-cyan-300/20 bg-cyan-400/[0.07] px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wide text-cyan-200">
+                    {micStatus}
+                  </span>
+                </h2>
+                <p className="mt-1 text-xs font-mono text-slate-400">
+                  16kHz Mono PCM • Backend VAD
+                </p>
+              </div>
             </div>
 
-            <div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() =>
+                  micStatus === 'Live Mic Streaming...'
+                    ? stopMicrophoneStream()
+                    : startMicrophoneStream()
+                }
+                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold font-mono transition-all duration-200 ${
+                  micStatus === 'Live Mic Streaming...'
+                    ? 'border border-red-400/40 bg-red-500/10 text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.08)] hover:border-red-300/60 hover:bg-red-500/20 hover:shadow-[0_0_25px_rgba(239,68,68,0.15)]'
+                    : 'border border-green-200/50 bg-gradient-to-r from-green-300 to-cyan-400 text-[#030712] shadow-[0_0_28px_rgba(34,211,238,0.20)] hover:scale-[1.02] hover:shadow-[0_0_35px_rgba(34,211,238,0.30)]'
+                }`}
+              >
+                {micStatus === 'Live Mic Streaming...' ? (
+                  <>
+                    <Square size={14} />
+                    Stop Mic
+                  </>
+                ) : (
+                  <>
+                    <Play size={14} />
+                    Start Live Mic
+                  </>
+                )}
+              </button>
 
-              <h2 className="flex flex-wrap items-center gap-2 text-[15px] font-bold text-white">
+              <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-cyan-300/25 bg-white-400/[0.05] px-4 py-2.5 text-xs font-bold font-mono text-white-200 transition-all hover:border-cyan-300/50 hover:bg-cyan-400/10 hover:shadow-[0_0_20px_rgba(34,211,238,0.08)]">
+                <FileAudio size={14} />
+                Upload Audio
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
 
-                Live Voice Ingestion
-
-                <span className="rounded-full border border-cyan-300/20 bg-cyan-400/[0.07] px-2 py-0.5 text-[10px] font-bold font-mono uppercase tracking-wide text-cyan-200">
-                  {micStatus}
+          <div className="relative grid grid-cols-1 items-center gap-6 rounded-xl border border-cyan-300/10 bg-[#030712]/65 p-4 backdrop-blur-sm xl:grid-cols-[1fr_240px]">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-mono">
+                <span className="font-semibold uppercase tracking-wider text-slate-400">
+                  Active Audio Signal
                 </span>
+                <span className="font-black text-cyan-200">
+                  {micLevel}% RMS
+                </span>
+              </div>
 
-              </h2>
-
-              <p className="mt-1 text-xs font-mono text-slate-400">
-                16kHz Mono PCM • Backend VAD • 58-D Feature Extractor
-              </p>
-
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-
-            <button
-              onClick={() =>
-                micStatus === 'Live Mic Streaming...'
-                  ? stopMicrophoneStream()
-                  : startMicrophoneStream()
-              }
-              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold font-mono transition-all duration-200 ${
-                micStatus === 'Live Mic Streaming...'
-                  ? 'border border-red-400/40 bg-red-500/10 text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.08)] hover:border-red-300/60 hover:bg-red-500/20 hover:shadow-[0_0_25px_rgba(239,68,68,0.15)]'
-                  : 'border border-green-200/50 bg-gradient-to-r from-green-300 to-cyan-400 text-[#030712] shadow-[0_0_28px_rgba(34,211,238,0.20)] hover:scale-[1.02] hover:shadow-[0_0_35px_rgba(34,211,238,0.30)]'
-              }`}
-            >
-
-              {micStatus === 'Live Mic Streaming...' ? (
-                <>
-                  <Square size={14} />
-                  Stop Mic
-                </>
-              ) : (
-                <>
-                  <Play size={14} />
-                  Start Live Mic
-                </>
-              )}
-
-            </button>
-
-            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-cyan-300/25 bg-white-400/[0.05] px-4 py-2.5 text-xs font-bold font-mono text-white-200 transition-all hover:border-cyan-300/50 hover:bg-cyan-400/10 hover:shadow-[0_0_20px_rgba(34,211,238,0.08)]">
-
-              <FileAudio size={14} />
-              Upload Audio
-
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-
-            </label>
-
-          </div>
-        </div>
-
-        <div className="relative grid grid-cols-1 items-center gap-6 rounded-xl border border-cyan-300/10 bg-[#030712]/65 p-4 backdrop-blur-sm md:grid-cols-[1fr_280px]">
-
-          <div className="space-y-2">
-
-            <div className="flex items-center justify-between text-xs font-mono">
-
-              <span className="font-semibold uppercase tracking-wider text-slate-400">
-                Active Audio Signal
-              </span>
-
-              <span className="font-black text-cyan-200">
-                {micLevel}% RMS
-              </span>
-
-            </div>
-
-            <div className="flex h-12 items-center gap-1 overflow-hidden rounded-lg border border-cyan-300/10 bg-black/40 px-3 py-2">
-
-              {Array.from({ length: 32 }).map((_, index) => {
-
-                const wave = 20 + ((index * 17) % 40)
-
-                const height =
-                  micLevel > 0
-                    ? Math.min(
-                        100,
-                        Math.max(
-                          10,
-                          micLevel * (0.45 + wave / 100)
+              <div className="flex h-12 items-center gap-1 overflow-hidden rounded-lg border border-cyan-300/10 bg-black/40 px-3 py-2">
+                {Array.from({ length: 32 }).map((_, index) => {
+                  const wave = 20 + ((index * 17) % 40)
+                  const height =
+                    micLevel > 0
+                      ? Math.min(
+                          100,
+                          Math.max(
+                            10,
+                            micLevel * (0.45 + wave / 100)
+                          )
                         )
-                      )
-                    : 10
+                      : 10
 
-                return (
-                  <div
-                    key={index}
-                    className={`flex-1 rounded-full transition-all duration-75 ${
-                      micLevel > 15
-                        ? 'bg-gradient-to-t from-cyan-400 via-violet-400 to-fuchsia-400 shadow-[0_0_9px_rgba(34,211,238,0.45)]'
-                        : 'bg-gradient-to-t from-cyan-500 to-cyan-200'
-                    }`}
-                    style={{ height: `${height}%` }}
-                  />
-                )
-              })}
+                  return (
+                    <div
+                      key={index}
+                      className={`flex-1 rounded-full transition-all duration-75 ${
+                        micLevel > 15
+                          ? 'bg-gradient-to-t from-cyan-400 via-violet-400 to-fuchsia-400 shadow-[0_0_9px_rgba(34,211,238,0.45)]'
+                          : 'bg-gradient-to-t from-cyan-500 to-cyan-200'
+                      }`}
+                      style={{ height: `${height}%` }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
 
+            <div className="grid grid-cols-2 gap-3 xl:border-l border-cyan-300/10 xl:pl-4 text-xs font-mono">
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Input
+                </span>
+                <span className="font-bold text-white">
+                  {inputMode === 'mic' ? 'MIC' : 'FILE'}
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Sample Rate
+                </span>
+                <span className="font-bold text-cyan-200">
+                  16 kHz
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Channels
+                </span>
+                <span className="font-bold text-white">
+                  1 Mono
+                </span>
+              </div>
+              <div>
+                <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                  Transport
+                </span>
+                <span className="font-bold text-emerald-200">
+                  WebSocket
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 border-l border-cyan-300/10 pl-4 text-xs font-mono">
-
-            <div>
-              <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Input
-              </span>
-              <span className="font-bold text-white">
-                {inputMode === 'mic' ? 'MIC' : 'FILE'}
-              </span>
-            </div>
-
-            <div>
-              <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Sample Rate
-              </span>
-              <span className="font-bold text-cyan-200">
-                16 kHz
-              </span>
-            </div>
-
-            <div>
-              <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Channels
-              </span>
-              <span className="font-bold text-white">
-                1 Mono
-              </span>
-            </div>
-
-            <div>
-              <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Transport
-              </span>
-              <span className="font-bold text-emerald-200">
-                WebSocket
-              </span>
-            </div>
-
-          </div>
-        </div>
-
-        {inputMode === 'mic' &&
-          micStatus === 'Live Mic Streaming...' && (
+          {inputMode === 'mic' && micStatus === 'Live Mic Streaming...' && (
             <div className="mt-4">
               <AudioPlaybackBar
                 label="Live Mic Monitor"
@@ -418,7 +388,68 @@ export default function Overview({
             </div>
           )}
 
-      </section>
+        </section>
+
+        {/* AUDIO SPECTROGRAM */}
+        <section className="relative overflow-hidden flex flex-col justify-between rounded-2xl border border-violet-400/25 bg-[#07111f]/75 p-5 shadow-[0_0_45px_rgba(139,92,246,0.07)] backdrop-blur-xl h-full min-h-[220px]">
+          
+          <div className="pointer-events-none absolute -left-10 -bottom-10 h-32 w-32 rounded-full bg-fuchsia-500/10 blur-3xl" />
+          
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className={`flex size-10 items-center justify-center rounded-xl border ${micLevel > 5 ? 'border-violet-300/60 bg-violet-400/15 text-violet-200 shadow-[0_0_20px_rgba(139,92,246,0.25)] animate-pulse' : 'border-violet-300/30 bg-violet-400/[0.08] text-violet-200'}`}>
+                <Waves size={18} />
+              </div>
+              <div>
+                <h2 className="text-[14px] font-bold text-white leading-tight">Live Spectrogram</h2>
+                <p className="mt-0.5 text-[10px] font-mono text-slate-400">Time / Freq Analysis</p>
+              </div>
+            </div>
+            
+            <span className="rounded-md border border-violet-300/20 bg-violet-400/[0.07] px-2 py-1 text-[9px] font-bold font-mono uppercase tracking-wider text-violet-200 shadow-[0_0_10px_rgba(139,92,246,0.1)]">
+              {micLevel > 0 ? 'Analyzing' : 'Standby'}
+            </span>
+          </div>
+
+          <div className="flex-1 w-full relative z-10 rounded-xl border border-violet-300/15 bg-black/50 p-2 overflow-hidden flex flex-col justify-between gap-[2px]">
+            {Array.from({ length: 10 }).map((_, bandIdx) => (
+              <div key={bandIdx} className="w-full flex-1 flex items-center gap-[2px]">
+                {Array.from({ length: 36 }).map((_, timeIdx) => {
+                  // Simulate 2D spectrogram visualization logic driven by micLevel
+                  const base = (bandIdx * 13 + timeIdx * 19) % 100;
+                  const active = micLevel > 0;
+                  
+                  // Lower frequencies (higher index visually or vice versa) get more activity
+                  const threshold = active ? (micLevel * (1 + (10 - bandIdx)/10)) : 8;
+                  const isLit = base < threshold;
+
+                  let colorClass = 'bg-violet-500/10';
+                  if (isLit) {
+                    if (bandIdx < 3) colorClass = 'bg-fuchsia-400 shadow-[0_0_8px_rgba(232,121,249,0.5)]';
+                    else if (bandIdx < 7) colorClass = 'bg-violet-400 shadow-[0_0_8px_rgba(167,139,250,0.5)]';
+                    else colorClass = 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]';
+                  }
+
+                  return (
+                    <div 
+                      key={timeIdx} 
+                      className={`h-full flex-1 rounded-[1px] transition-all duration-100 ${colorClass}`} 
+                      style={{ opacity: isLit ? Math.min(1, 0.4 + threshold/100) : 0.2 }} 
+                    />
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 relative z-10 flex items-center justify-between text-[9px] font-mono font-bold uppercase tracking-widest text-slate-500">
+            <span>0 kHz</span>
+            <span>8 kHz</span>
+          </div>
+
+        </section>
+
+      </div>
 
 
       {/* =====================================================

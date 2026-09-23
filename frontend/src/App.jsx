@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useMemo, useState, useEffect, useRef } from 'react'
@@ -8,7 +7,10 @@ import {
   BarChart3,
   History as HistoryIcon,
   CircleHelp,
-  ShieldCheck
+  ShieldCheck,
+  UserCheck,
+  ChevronRight,
+  Terminal
 } from 'lucide-react'
 
 // Sub-components
@@ -322,10 +324,7 @@ export default function App() {
       type: 'session_context',
       scenario:
         scenario === 'high_value_transaction' ? null : scenario,
-      transaction_amount_inr:
-        scenario === 'high_value_transaction'
-          ? parsedAmount
-          : null
+      transaction_amount_inr: parsedAmount // FIXED: Sending parsedAmount for all scenarios
     }
 
     ws.send(JSON.stringify(payload))
@@ -702,14 +701,14 @@ export default function App() {
       </div>
 
       {/* =====================================================
-          SIDEBAR
+          SIDEBAR (EXPANDABLE ON HOVER)
           ===================================================== */}
 
-      <aside className="relative z-10 flex w-full flex-col border-b border-white/[0.10] bg-[#060711]/90 p-5 shadow-[8px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl md:h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r lg:w-72">
+      <aside className="group relative z-20 flex w-full flex-col border-b border-white/[0.10] bg-[#060711]/90 p-4 shadow-[8px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl transition-all duration-300 ease-in-out md:h-screen md:w-24 md:shrink-0 md:border-b-0 md:border-r md:p-5 md:hover:w-64 lg:md:hover:w-72">
 
         {/* BRANDING */}
 
-        <div className="mb-8 flex items-center gap-3">
+        <div className="mb-8 flex items-center gap-3 overflow-hidden">
 
           <div className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan-300/30 bg-gradient-to-br from-cyan-400/20 via-violet-500/20 to-fuchsia-500/20 shadow-[0_0_30px_rgba(34,211,238,0.20)]">
 
@@ -724,7 +723,7 @@ export default function App() {
             <div className="absolute inset-0 rounded-xl bg-cyan-400/10 blur-md" />
           </div>
 
-          <div>
+          <div className="whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
 
             <p className="text-[19px] font-extrabold leading-[0.95] tracking-tight text-white drop-shadow-[0_0_14px_rgba(255,255,255,0.12)]">
               VeriVox
@@ -777,7 +776,7 @@ export default function App() {
               <button
                 key={id}
                 onClick={() => setActivePage(id)}
-                className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-[13px] font-semibold tracking-[0.01em] transition-all duration-300 ${
+                className={`group/btn relative flex w-full items-center gap-3 overflow-hidden rounded-xl border p-3 text-[13px] font-semibold tracking-[0.01em] transition-all duration-300 ${
                   activePage === id
                     ? 'border-cyan-300/30 bg-gradient-to-r from-cyan-400/[0.14] via-violet-500/[0.12] to-fuchsia-500/[0.10] text-white shadow-[0_0_28px_rgba(34,211,238,0.10),inset_0_1px_0_rgba(255,255,255,0.08)]'
                     : 'border-transparent text-slate-300 hover:border-white/[0.12] hover:bg-white/[0.055] hover:text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.05)]'
@@ -795,49 +794,49 @@ export default function App() {
                 <Icon
                   size={18}
                   strokeWidth={activePage === id ? 2.2 : 1.9}
-                  className={
+                  className={`shrink-0 transition-all ${
                     activePage === id
                       ? 'relative z-10 text-cyan-200 drop-shadow-[0_0_7px_rgba(103,232,249,0.7)]'
-                      : 'relative z-10 text-slate-400 transition-all group-hover:text-cyan-200 group-hover:drop-shadow-[0_0_6px_rgba(103,232,249,0.5)]'
-                  }
+                      : 'relative z-10 text-slate-400 group-hover/btn:text-cyan-200 group-hover/btn:drop-shadow-[0_0_6px_rgba(103,232,249,0.5)]'
+                  }`}
                 />
 
-                <span className="relative z-10">
+                <span className="relative z-10 whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
                   {label}
                 </span>
 
                 {activePage === id && (
-                  <span className="ml-auto size-1.5 rounded-full bg-cyan-300 shadow-[0_0_9px_rgba(103,232,249,0.9)]" />
+                  <span className="ml-auto size-1.5 shrink-0 rounded-full bg-cyan-300 shadow-[0_0_9px_rgba(103,232,249,0.9)] transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100" />
                 )}
               </button>
             )
           )}
         </nav>
 
-        {/* BOTTOM STATUS & ACTIONS */}
+        {/* BOTTOM STATUS, ACTIONS & ADMIN PROFILE */}
 
-        <div className="mt-8 flex flex-col gap-4">
+        <div className="mt- auto flex flex-col gap-3 pt-4">
 
+          {/* INSPECT PAYLOAD BUTTON */}
           <button
             onClick={() =>
               setShowInspector((v) => !v)
             }
-            className="group relative w-full overflow-hidden rounded-xl border border-cyan-300/20 bg-gradient-to-r from-cyan-400/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] px-4 py-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-cyan-200 shadow-[0_0_22px_rgba(34,211,238,0.05)] transition-all duration-300 hover:border-cyan-300/40 hover:bg-cyan-400/10 hover:text-cyan-100 hover:shadow-[0_0_30px_rgba(34,211,238,0.12)]"
+            className="group/btn relative flex w-full items-center gap-2 overflow-hidden rounded-xl border border-cyan-300/20 bg-gradient-to-r from-cyan-400/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] p-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-cyan-200 shadow-[0_0_22px_rgba(34,211,238,0.05)] transition-all duration-300 hover:border-cyan-300/40 hover:bg-cyan-400/10 hover:text-cyan-100 hover:shadow-[0_0_30px_rgba(34,211,238,0.12)]"
           >
-            <span className="mr-2 text-cyan-400/70">
-              $
-            </span>
+            <Terminal size={16} className="shrink-0 text-cyan-300" />
 
-            {showInspector
-              ? 'hide_contract'
-              : 'inspect_payload'}
-
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-cyan-400/30 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-300/70">
-              →
-            </span>
+            <div className="flex flex-1 items-center justify-between whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
+              <span>
+                <span className="mr-1 text-cyan-400/70">$</span>
+                {showInspector ? 'hide_contract' : 'inspect_payload'}
+              </span>
+              <ChevronRight size={14} className="text-cyan-400/50 group-hover/btn:translate-x-0.5" />
+            </div>
           </button>
 
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.11] bg-white/[0.045] p-3.5 text-xs backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          {/* SYSTEM STATUS CARD */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.11] bg-white/[0.045] p-3 text-xs backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
 
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/[0.04] via-transparent to-violet-500/[0.07]" />
 
@@ -854,30 +853,52 @@ export default function App() {
                 }`}
               />
 
-              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-white">
+              <span className="whitespace-nowrap font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-white transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
                 System Status
               </span>
             </div>
 
-            <span className="relative mt-2 block font-mono text-[9px] font-semibold leading-relaxed tracking-[0.08em] text-slate-400">
-              {securityTerminated
-                ? 'TERMINATED · SECURITY ALERT'
-                : isBackendOnline
-                ? isConnected
-                  ? 'BACKEND ONLINE · STREAM ACTIVE'
-                  : 'BACKEND ONLINE'
-                : 'BACKEND OFFLINE'}
-            </span>
-
-            <div className="relative mt-3 h-px w-full bg-gradient-to-r from-cyan-400/20 via-violet-400/10 to-transparent" />
-
-            <div className="relative mt-2 flex items-center justify-between text-[8px] font-mono uppercase tracking-[0.14em] text-slate-500">
-              <span>VERIVOX CORE</span>
-              <span className="text-cyan-300/70">
-                LIVE
+            <div className="hidden whitespace-nowrap transition-opacity duration-300 md:group-hover:block md:opacity-0 md:group-hover:opacity-100">
+              <span className="relative mt-2 block font-mono text-[9px] font-semibold leading-relaxed tracking-[0.08em] text-slate-400">
+                {securityTerminated
+                  ? 'TERMINATED · SECURITY ALERT'
+                  : isBackendOnline
+                  ? isConnected
+                    ? 'BACKEND ONLINE · STREAM ACTIVE'
+                    : 'BACKEND ONLINE'
+                  : 'BACKEND OFFLINE'}
               </span>
+
+              <div className="relative mt-2 h-px w-full bg-gradient-to-r from-cyan-400/20 via-violet-400/10 to-transparent" />
+
+              <div className="relative mt-2 flex items-center justify-between text-[8px] font-mono uppercase tracking-[0.14em] text-slate-500">
+                <span>VERIVOX CORE</span>
+                <span className="text-cyan-300/70">
+                  LIVE
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* ADMIN PROFILE HANDLING */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.10] bg-white/[0.03] p-2 transition-all duration-300 hover:border-cyan-300/30 hover:bg-white/[0.06]">
+            <div className="flex items-center gap-3">
+              <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 via-violet-600/20 to-fuchsia-600/20 text-cyan-200">
+                <UserCheck size={18} />
+                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-[#060711] bg-emerald-400" />
+              </div>
+
+              <div className="flex flex-1 flex-col overflow-hidden whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
+                <span className="truncate text-xs font-bold text-slate-200">
+                  Admin
+                </span>
+                <span className="truncate text-[10px] font-mono tracking-wider text-cyan-400/80 uppercase">
+                  Security Admin
+                </span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </aside>
 
