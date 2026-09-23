@@ -135,7 +135,7 @@ class SpeakerVerifier:
 
         # encode_batch() returns shape (batch, 1, embedding_dim);
         # squeeze down to a flat (192,) numpy vector.
-        embedding = output.squeeze().detach().numpy().astype(np.float32)
+        embedding = output.squeeze().detach().cpu().numpy().astype(np.float32)
 
         if embedding.shape != (self.embedding_dim,):
             raise ValueError(

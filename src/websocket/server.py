@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import time
 
 import joblib
@@ -17,7 +18,7 @@ from src.risk_engine.stream_manager import StreamManager
 from src.vad import VoiceActivityDetector
 from src.window_accumulator import WindowAccumulator
 
-# --- Sprint 1B additions ---
+from src.file_loader import load_audio_file
 from src.risk_engine.prosody_buffer import ProsodyBuffer
 from src.risk_engine.shap_engine import ShapEngine
 from src.speaker_registry import (

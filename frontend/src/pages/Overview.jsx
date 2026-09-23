@@ -1,6 +1,6 @@
 'use client'
 
-import { Mic, RadioTower, Play, Square, FileAudio, AlertTriangle, X, Radio, Volume2, Settings2, Gauge, Waves, Bell, ShieldAlert, CheckCircle2 } from 'lucide-react'
+import { Mic, RadioTower, Play, Square, FileAudio, AlertTriangle, X, Radio, Volume2, Settings2, Gauge, Waves, Bell, ShieldAlert, CheckCircle2, Fingerprint } from 'lucide-react'
 import AudioPlaybackBar from '../components/AudioPlaybackBar'
 import StatusPill from '../components/StatusPill'
 import LiveGraph from '../components/LiveGraph'
@@ -10,7 +10,8 @@ export default function Overview({
   micStatus, inputMode, micLevel, isLiveMonitoring, selected, activeStreamId,
   securityTerminated, showInspector, summary, streams,
   startMicrophoneStream, stopMicrophoneStream, toggleLiveMonitor, handleFileUpload,
-  acknowledgeAlert, setActiveStreamId
+  acknowledgeAlert, setActiveStreamId,
+  isFilePlaying, toggleFilePlayback, fileName
 }) {
   // Generate dynamic security notification items based on current stream states
   const securityNotifications = [
@@ -31,6 +32,11 @@ export default function Overview({
       time: 'Real-time'
     }
   ]
+
+  // --- Biometric Speaker Verification status derivation ---
+  const hasSpeakerData = selected.speaker_similarity !== undefined && selected.speaker_similarity !== null
+  const speakerMatch = selected.speaker_match
+  const speakerSimilarityPct = hasSpeakerData ? Math.round(Number(selected.speaker_similarity) * 100) : null
 
   return (
     <div className="space-y-8">
@@ -80,7 +86,6 @@ export default function Overview({
         </div>
       </section>
 
-      {/* Hero Section */}
       {/* Hero Section */}
       <section className="max-w-3xl">
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-verivox-yellow font-mono">Live protection</p>
@@ -158,9 +163,23 @@ export default function Overview({
             <div><span className="text-slate-500 block text-[10px]">TRANSPORT</span><span className="text-verivox-cyan font-bold">WebSocket</span></div>
           </div>
         </div>
+
+        {/* --- Audio Playback Bar: live mic monitor --- */}
         {inputMode === 'mic' && micStatus === 'Live Mic Streaming...' && (
           <div className="mt-4">
             <AudioPlaybackBar label="Live Mic Monitor" isPlaying={isLiveMonitoring} level={micLevel} onToggle={toggleLiveMonitor} />
+          </div>
+        )}
+
+        {/* --- Audio Playback Bar: uploaded file playback --- */}
+        {inputMode === 'file' && fileName && (
+          <div className="mt-4">
+            <AudioPlaybackBar
+              label={`Playing: ${fileName}`}
+              isPlaying={isFilePlaying}
+              level={micLevel}
+              onToggle={toggleFilePlayback}
+            />
           </div>
         )}
       </section>
@@ -257,6 +276,56 @@ export default function Overview({
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-400"><Waves size={16} className="text-verivox-cyan" /> Feature Latency</div>
               <p className="mt-3 text-xl font-bold font-mono text-white">{selected.feature_latency_ms !== undefined ? `${selected.feature_latency_ms} ms` : '--'}</p>
               <p className="mt-2 text-xs leading-5 text-slate-400">58-dimensional feature vector processed by the backend pipeline.</p>
+            </div>
+          </div>
+
+          {/* --- Biometric Voiceprint Verification card --- */}
+          <div className={`rounded-xl border p-5 ${
+            !hasSpeakerData
+              ? 'border-verivox-border bg-verivox-cardHover'
+              : speakerMatch
+                ? 'border-emerald-400/30 bg-emerald-400/5'
+                : 'border-verivox-pink/40 bg-verivox-pink/5'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                <Fingerprint size={16} className="text-verivox-cyan" />
+                Biometric Voiceprint Verification
+              </div>
+              {!hasSpeakerData ? (
+                <span className="text-[10px] font-mono px-2 py-1 rounded-full bg-verivox-cardHover border border-verivox-border text-slate-400 uppercase">
+                  Awaiting Speech
+                </span>
+              ) : speakerMatch ? (
+                <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-400 uppercase">
+                  <CheckCircle2 size={11} /> Verified Authorized Speaker
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-full bg-verivox-pink/10 border border-verivox-pink/40 text-verivox-pink uppercase">
+                  <ShieldAlert size={11} /> Voice Mismatch / Impostor
+                </span>
+              )}
+            </div>
+
+            <div className="flex justify-between gap-4 text-xs mb-2">
+              <span className="text-slate-400">Enrolled Reference</span>
+              <span className="font-mono font-bold text-white text-right">
+                {selected.speaker_id || 'authorized_user'} (demo/real_voice.wav)
+              </span>
+            </div>
+
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-slate-400">Similarity Score</span>
+              <span className="font-mono font-bold text-verivox-cyan">
+                {hasSpeakerData ? `${speakerSimilarityPct}%` : '--'}
+              </span>
+            </div>
+
+            <div className="h-1.5 w-full bg-verivox-border rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${speakerMatch ? 'bg-emerald-400' : 'bg-verivox-pink'}`}
+                style={{ width: hasSpeakerData ? `${Math.min(Math.max(speakerSimilarityPct, 0), 100)}%` : '0%' }}
+              />
             </div>
           </div>
 
