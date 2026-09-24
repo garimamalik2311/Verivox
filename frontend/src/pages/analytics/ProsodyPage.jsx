@@ -160,7 +160,7 @@ export default function ProsodyPage({ analytics, selected }) {
             Prosody ML Signal
           </p>
           <p className="text-2xl font-bold font-mono text-amber-300 mt-2">
-            {prosody.signal || 'UNAVAILABLE'}
+            {{BONAFIDE_SUPPORT: 'Human', SPOOF_SUPPORT: 'Spoof', INCONCLUSIVE: 'Inconclusive', UNAVAILABLE: 'Unavailable'}[prosody.signal] || 'Unavailable'}
           </p>
           <p className="text-xs text-slate-400 mt-1">
             Supporting evidence only; does not replace the primary detector.
