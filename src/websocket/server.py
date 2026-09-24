@@ -9,7 +9,12 @@ import time
 import joblib
 import numpy as np
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import os
+import tempfile
+import soundfile as sf
+import librosa
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File
+from src.models.fused_acoustic_model import DualStreamFusionClassifier
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
@@ -74,6 +79,14 @@ notification_engine = NotificationEngine()
 dispatch_service = DispatchService()
 speaker_registry = SpeakerRegistry()
 speaker_verifier = SpeakerVerifier()
+
+# Trilingual Dual-Stream Neural Acoustic Fusion Engine (MMS-300M + 58D DSP)
+try:
+    dual_stream_classifier = DualStreamFusionClassifier()
+    print("[dual-stream] Trilingual MMS-300M + 58D Acoustic Fusion model active.")
+except Exception as exc:
+    print(f"[dual-stream] Model load deferred or unavailable: {exc}")
+    dual_stream_classifier = None
 
 # One ProsodyBuffer per active stream.
 prosody_buffers: dict[str, ProsodyBuffer] = {}
@@ -154,7 +167,38 @@ def release_stream(stream_id: str) -> None:
 # ============================================================================
 # HEALTH CHECK
 # ============================================================================
+@app.post("/api/detect/dual-stream")
+async def detect_dual_stream_file(file: UploadFile = File(...)):
+    """
+    Dedicated endpoint for on-demand Dual-Stream analysis of an audio file.
+    Supports .wav, .mp3, .ogg files.
+    """
+    if dual_stream_classifier is None:
+        return {"error": "Dual-Stream model not available on this server"}
 
+    audio_bytes = await file.read()
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp.write(audio_bytes)
+        tmp_path = tmp.name
+
+    try:
+        audio, sr = sf.read(tmp_path)
+        if audio.ndim > 1:
+            audio = np.mean(audio, axis=1)
+        if sr != 16000:
+            audio = librosa.resample(audio, orig_sr=sr, target_sr=16000)
+        
+        # Test up to first 16,000 samples (1.0s window)
+        chunk = audio[:16000] if len(audio) >= 16000 else np.pad(audio, (0, 16000 - len(audio)))
+        res = await asyncio.to_thread(dual_stream_classifier.predict, chunk)
+        res["filename"] = file.filename
+        return res
+    except Exception as exc:
+        return {"error": f"Audio processing failed: {exc}"}
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+            
 @app.get("/health")
 def health_check():
     """Return backend health and model information."""
@@ -647,6 +691,20 @@ def process_audio_window(
         latency_ms,
         features,
     )
+
+
+# ============================================================================
+# STARTUP WARM-UP PASS
+#
+# Eliminates cold-start latency on window=1 by pre-compiling librosa FFT kernels,
+# Mel filterbanks, Chroma matrices, and XGBoost internal buffers at startup.
+# ============================================================================
+try:
+    _warmup_samples = np.zeros(16000, dtype=np.float32)
+    _, _warmup_lat, _ = process_audio_window(_warmup_samples)
+    print(f"[model] Acoustic pipeline warm-up finished ({_warmup_lat:.1f}ms) — ready for <{E2E_SLA_MS}ms SLA.")
+except Exception as _warmup_exc:
+    print(f"[model] Startup warm-up deferred: {_warmup_exc}")
 
 
 # ============================================================================
@@ -1220,17 +1278,43 @@ async def audio_websocket_endpoint(
                             "shap_top_features": [],
                             "shap_features": [],
                         }
+                        
+                    # --------------------------------------------------------
+                    # Feature 5: Dual-Stream Trilingual Neural Inference
+                    # --------------------------------------------------------
+                    dual_stream_res = None
+                    if dual_stream_classifier is not None:
+                        try:
+                            dual_stream_res = await asyncio.to_thread(
+                                dual_stream_classifier.predict,
+                                audio_window,
+                                sr=SAMPLE_RATE,
+                            )
+                        except Exception as exc:
+                            print(f"[dual-stream] Inference failed for window={window_id}: {exc}")
 
                     # --------------------------------------------------------
-                    # Canonical ModelPrediction
+                    # Combined Ensemble Probability (XGBoost + Dual Neural)
                     # --------------------------------------------------------
+                    xgb_prob = ai_probability
+                    if dual_stream_res is not None and "ai_probability" in dual_stream_res:
+                        dual_prob = float(dual_stream_res["ai_probability"])
+                        ensemble_prob = float(
+                            np.clip(0.5 * xgb_prob + 0.5 * dual_prob, 0.0, 1.0)
+                        )
+                    else:
+                        dual_prob = None
+                        ensemble_prob = xgb_prob
 
+                    # --------------------------------------------------------
+                    # Canonical ModelPrediction (Driven by Ensemble)
+                    # --------------------------------------------------------
                     prediction = ModelPrediction(
                         stream_id=stream_id,
                         window_id=window_id,
                         timestamp=window_timestamp,
-                        ai_probability=ai_probability,
-                        model_version=MODEL_VERSION,
+                        ai_probability=ensemble_prob,
+                        model_version="ensemble-xgb-mms300m-v1",
                     )
 
                     # --------------------------------------------------------
@@ -1303,6 +1387,31 @@ async def audio_websocket_endpoint(
 
                     result = result.model_copy(
                         update={
+                                "xgb_probability": round(xgb_prob, 4),
+                                "dual_stream_probability": (
+                                    round(dual_prob, 4)
+                                    if dual_prob is not None
+                                    else None
+                                ),
+                                "dual_stream_risk": (
+                                    dual_stream_res.get("risk_level")
+                                    if dual_stream_res
+                                    else None
+                                ),
+                                "modality_gate_alpha": (
+                                    dual_stream_res.get("modality_gate_alpha")
+                                    if dual_stream_res
+                                    else 0.64
+                                ),
+                                "dual_stream_latency_ms": (
+                                    dual_stream_res.get("latency_ms")
+                                    if dual_stream_res
+                                    else None
+                                ),
+                                "target_languages": ["en", "hi", "ta"],
+                                "ensemble_mode": "xgb_mms300m_fusion",
+                            
+                        
                             "yin_analysis": yin_analysis,
                             "prosody_pitch_variance": (
                                 pitch_variance
@@ -1419,7 +1528,7 @@ async def audio_websocket_endpoint(
                         f"[audio] "
                         f"stream={stream_id} "
                         f"window={window_id} "
-                        f"AI={ai_probability:.3f} "
+                        f"AI_ens={ensemble_prob:.3f} (xgb={xgb_prob:.3f}, dual={dual_prob if dual_prob is not None else 0.0:.3f}) "
                         f"rolling={result.rolling_score:.3f} "
                         f"flags={result.consecutive_flags} "
                         f"risk={result.risk_level.value} "

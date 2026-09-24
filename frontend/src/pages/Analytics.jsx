@@ -91,7 +91,7 @@ export default function Analytics({
       </div>
 
       {/* =====================================================
-          SUB-NAVIGATION TABS
+          SUB-NAVIGATION TABS (5 TABS)
       ===================================================== */}
 
       <div className="relative grid grid-cols-2 gap-2 sm:grid-cols-4">
