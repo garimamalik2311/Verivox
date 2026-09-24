@@ -26,7 +26,11 @@ import Admin from "./pages/Admin";
 // Utilities
 import { initialHistories, getAnalyticsData } from './utils/helpers'
 
-export default function App() {
+// 1. Import the provider
+import { SecurityProvider } from './context/SecurityContext'
+
+// Renamed your original component to MainApp to keep all its internal logic intact
+function MainApp() {
   // =========================================================
   // AUTHENTICATION STATE
   // =========================================================
@@ -50,6 +54,9 @@ export default function App() {
   const [transactionAmountInr, setTransactionAmountInr] = useState('525000')
   const [selectedScenario, setSelectedScenario] = useState('high_value_transaction')
   const [contextConfigured, setContextConfigured] = useState(false)
+  
+  // NEW: State to hold the incident data being sent to the Admin board
+  const [escalatedIncident, setEscalatedIncident] = useState(null)
 
   // Refs for WebSockets and Audio
   const monitorGainRef = useRef(null)
@@ -357,7 +364,7 @@ export default function App() {
       type: 'session_context',
       scenario:
         scenario === 'high_value_transaction' ? null : scenario,
-      transaction_amount_inr: parsedAmount // FIXED: Sending parsedAmount for all scenarios
+      transaction_amount_inr: parsedAmount 
     }
 
     ws.send(JSON.stringify(payload))
@@ -405,11 +412,10 @@ export default function App() {
       const silentGain = audioCtx.createGain()
       silentGain.gain.value = 0
 
-      // Buffers to accumulate audio and prevent React render spam
       let pcmBuffer = new Int16Array(0)
       let rmsAccumulator = 0
       let rmsCount = 0
-      const CHUNK_SIZE = 8000 // 0.5 seconds at 16kHz to match file upload
+      const CHUNK_SIZE = 8000 
 
       processor.onaudioprocess = (event) => {
         const ws = wsRef.current
@@ -417,30 +423,24 @@ export default function App() {
 
         const inputData = event.inputBuffer.getChannelData(0)
         
-        // 1. Accumulate RMS to average it out over the 500ms chunk
         rmsAccumulator += calculateRMS(inputData)
         rmsCount++
 
-        // 2. Resample and convert to PCM16
         const audio16k = resampleTo16k(inputData, actualSampleRate)
         const pcm16 = float32ToPCM16(audio16k)
 
-        // 3. Append new samples to our holding buffer
         const newBuffer = new Int16Array(pcmBuffer.length + pcm16.length)
         newBuffer.set(pcmBuffer, 0)
         newBuffer.set(pcm16, pcmBuffer.length)
         pcmBuffer = newBuffer
 
-        // 4. Only send data when we have a full chunk (matches File Stream behavior)
         while (pcmBuffer.length >= CHUNK_SIZE) {
           const chunk = pcmBuffer.slice(0, CHUNK_SIZE)
           ws.send(chunk.buffer)
 
-          // Update UI Mic Level only twice a second (stops React stuttering)
           const avgRms = rmsCount > 0 ? rmsAccumulator / rmsCount : 0
           setMicLevel(Math.min(Math.round(avgRms * 200), 100))
 
-          // Reset accumulators and keep remainder of buffer
           rmsAccumulator = 0
           rmsCount = 0
           pcmBuffer = pcmBuffer.slice(CHUNK_SIZE)
@@ -676,6 +676,12 @@ export default function App() {
       setMicStatus('Stream frozen after alert')
     }
 
+    // NEW: Save the incident to be displayed in the Admin panel
+    setEscalatedIncident({
+      ...selected,
+      streamId: activeStreamId
+    })
+
     setStreams((prev) => ({
       ...prev,
       [activeStreamId]: {
@@ -683,6 +689,15 @@ export default function App() {
         alert_triggered: false
       }
     }))
+
+    // NEW: Switch to the admin page immediately
+    setActivePage('admin')
+  }
+
+  // NEW: Handler for the Admin dashboard to clear the alert
+  const handleResolveIncident = (actionType) => {
+    console.log(`Admin took action: ${actionType}`)
+    setEscalatedIncident(null)
   }
 
   const summary = useMemo(() => {
@@ -1009,9 +1024,13 @@ export default function App() {
           )}
           {activePage === 'how' && <Architecture />}
           
-          {/* Add this block for the Admin Page */}
+          {/* UPDATED ADMIN COMPONENT W/ NEW PROPS */}
           {activePage === 'admin' && (
-            <Admin />
+            <Admin 
+              escalatedIncident={escalatedIncident}
+              onResolveIncident={handleResolveIncident}
+              selected={selected} activeStreamId={activeStreamId}
+            />
           )}
 
           {activePage === 'analytics' && (
@@ -1044,5 +1063,14 @@ export default function App() {
         </div>
       </div>
     </main>
+  )
+}
+
+// 2. Wrap the entire application components/routes inside the provider
+export default function App() {
+  return (
+    <SecurityProvider>
+      <MainApp />
+    </SecurityProvider>
   )
 }
