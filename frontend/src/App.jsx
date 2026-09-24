@@ -77,23 +77,8 @@ export default function App() {
     // Only connect if the user is authenticated and on the dashboard
     if (!isAuthenticated) return
 
-    const streamId = uniqueStreamIdRef.current
-    const wsUrl =
-      import.meta.env.VITE_RISK_WS_URL ||
-      `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
-
-    console.log('Connecting Risk WebSocket:', wsUrl)
-
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
-
-    ws.onopen = () => {
-      console.log('Risk WebSocket connected')
-      setIsConnected(true)
-      setIsBackendOnline(true)
-      setMicStatus('Select Security Context')
-      setContextConfigured(false)
-    }
+    let isUnmounted = false
+    let reconnectTimeout = null
 
     const connect = () => {
       if (isUnmounted) return
