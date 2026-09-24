@@ -107,7 +107,11 @@ class RiskResult(BaseModel):
     dual_stream_latency_ms: float | None = None
     target_languages: list[str] = Field(default_factory=lambda: ["en", "hi", "ta"])
 
+
     ensemble_mode: str = "xgb_mms300m_fusion"
+
+    ensemble_mode: str = "xgb_mms300m_fusion"
+
 
     ensemble_mode: str = "xgb_mms300m_fusion"
 
