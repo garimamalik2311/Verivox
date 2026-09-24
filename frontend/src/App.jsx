@@ -21,6 +21,7 @@ import Architecture from './pages/Architecture'
 import AdversarialRobustness from './components/AdversarialRobustness'
 import SecurityReport from './pages/SecurityReport'
 import Hero from "./pages/Hero";
+import Admin from "./pages/Admin";
 
 // Utilities
 import { initialHistories, getAnalyticsData } from './utils/helpers'
@@ -900,23 +901,34 @@ export default function App() {
           </div>
 
           {/* ADMIN PROFILE HANDLING */}
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.10] bg-white/[0.03] p-2 transition-all duration-300 hover:border-cyan-300/30 hover:bg-white/[0.06]">
-            <div className="flex items-center gap-3">
-              <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 via-violet-600/20 to-fuchsia-600/20 text-cyan-200">
-                <UserCheck size={18} />
-                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-[#060711] bg-emerald-400" />
-              </div>
+<button 
+  onClick={() => setActivePage('admin')}
+  className={`group/admin relative flex w-full overflow-hidden rounded-xl border p-2 transition-all duration-300 text-left ${
+    activePage === 'admin'
+      ? 'border-cyan-300/40 bg-gradient-to-r from-cyan-400/[0.14] via-violet-500/[0.12] to-fuchsia-500/[0.10] shadow-[0_0_20px_rgba(34,211,238,0.15)]'
+      : 'border-white/[0.10] bg-white/[0.03] hover:border-cyan-300/30 hover:bg-white/[0.06]'
+  }`}
+>
+  <div className="flex items-center gap-3 w-full">
+    <div className={`relative flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+      activePage === 'admin' 
+        ? 'border-cyan-300 bg-cyan-400/30 text-white' 
+        : 'border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 via-violet-600/20 to-fuchsia-600/20 text-cyan-200'
+    }`}>
+      <UserCheck size={18} />
+      <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-[#060711] bg-emerald-400" />
+    </div>
 
-              <div className="flex flex-1 flex-col overflow-hidden whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
-                <span className="truncate text-xs font-bold text-slate-200">
-                  Admin
-                </span>
-                <span className="truncate text-[10px] font-mono tracking-wider text-cyan-400/80 uppercase">
-                  Security Admin
-                </span>
-              </div>
-            </div>
-          </div>
+    <div className="flex flex-1 flex-col overflow-hidden whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
+      <span className={`truncate text-xs font-bold ${activePage === 'admin' ? 'text-white' : 'text-slate-200'}`}>
+        Admin
+      </span>
+      <span className="truncate text-[10px] font-mono tracking-wider text-cyan-400/80 uppercase">
+        Security Admin
+      </span>
+    </div>
+  </div>
+</button>
 
         </div>
       </aside>
@@ -966,6 +978,12 @@ export default function App() {
             <div className="mx-auto max-w-6xl space-y-8">
               <AdversarialRobustness />
             </div>
+          )}
+          {activePage === 'how' && <Architecture />}
+          
+          {/* Add this block for the Admin Page */}
+          {activePage === 'admin' && (
+            <Admin />
           )}
 
           {activePage === 'analytics' && (
