@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   UserCheck,
   ChevronRight,
-  Terminal
+  LogOut
 } from 'lucide-react'
 
 // Sub-components
@@ -20,11 +20,20 @@ import History from './pages/History'
 import Architecture from './pages/Architecture'
 import AdversarialRobustness from './components/AdversarialRobustness'
 import SecurityReport from './pages/SecurityReport'
+import Hero from "./pages/Hero";
 
 // Utilities
 import { initialHistories, getAnalyticsData } from './utils/helpers'
 
 export default function App() {
+  // =========================================================
+  // AUTHENTICATION STATE
+  // =========================================================
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // =========================================================
+  // DASHBOARD STATE
+  // =========================================================
   const [activePage, setActivePage] = useState('overview')
   const [streams, setStreams] = useState({})
   const [streamHistories, setStreamHistories] = useState(initialHistories)
@@ -62,9 +71,12 @@ export default function App() {
   const currentHistory = streamHistories[activeStreamId] || []
 
   /* =========================================================
-     WEBSOCKET CONNECTION
+     WEBSOCKET CONNECTION (Only runs after authentication)
      ========================================================= */
   useEffect(() => {
+    // Only connect if the user is authenticated and on the dashboard
+    if (!isAuthenticated) return
+
     const streamId = uniqueStreamIdRef.current
     const wsUrl =
       import.meta.env.VITE_RISK_WS_URL ||
@@ -232,7 +244,7 @@ export default function App() {
 
       stopMicrophoneStream()
     }
-  }, [])
+  }, [isAuthenticated]) // Re-run effect if authentication status changes
 
   /* =========================================================
      AUDIO HELPERS
@@ -665,6 +677,16 @@ export default function App() {
     }
   }, [streams])
 
+  // =========================================================
+  // RENDER LOGIC
+  // =========================================================
+
+  // 1. Show Landing Page if not authenticated
+  if (!isAuthenticated) {
+    return <Hero onLogin={() => setIsAuthenticated(true)} />
+  }
+
+  // 2. Show Dashboard if authenticated
   return (
     <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#03040b] font-sans text-white md:flex-row">
 
@@ -817,19 +839,16 @@ export default function App() {
 
         <div className="mt- auto flex flex-col gap-3 pt-4">
 
-          {/* INSPECT PAYLOAD BUTTON */}
+          {/* RETURN TO HERO BUTTON */}
           <button
-            onClick={() =>
-              setShowInspector((v) => !v)
-            }
+            onClick={() => setIsAuthenticated(false)}
             className="group/btn relative flex w-full items-center gap-2 overflow-hidden rounded-xl border border-cyan-300/20 bg-gradient-to-r from-cyan-400/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] p-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-cyan-200 shadow-[0_0_22px_rgba(34,211,238,0.05)] transition-all duration-300 hover:border-cyan-300/40 hover:bg-cyan-400/10 hover:text-cyan-100 hover:shadow-[0_0_30px_rgba(34,211,238,0.12)]"
           >
-            <Terminal size={16} className="shrink-0 text-cyan-300" />
+            <LogOut size={16} className="shrink-0 text-cyan-300" />
 
             <div className="flex flex-1 items-center justify-between whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
               <span>
-                <span className="mr-1 text-cyan-400/70">$</span>
-                {showInspector ? 'hide_contract' : 'inspect_payload'}
+                Return to Home
               </span>
               <ChevronRight size={14} className="text-cyan-400/50 group-hover/btn:translate-x-0.5" />
             </div>
