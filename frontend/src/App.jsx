@@ -1,4 +1,3 @@
-
 'use client'
 
 import { useMemo, useState, useEffect, useRef } from 'react'
@@ -8,7 +7,10 @@ import {
   BarChart3,
   History as HistoryIcon,
   CircleHelp,
-  ShieldCheck
+  ShieldCheck,
+  UserCheck,
+  ChevronRight,
+  LogOut
 } from 'lucide-react'
 
 // Sub-components
@@ -18,11 +20,20 @@ import History from './pages/History'
 import Architecture from './pages/Architecture'
 import AdversarialRobustness from './components/AdversarialRobustness'
 import SecurityReport from './pages/SecurityReport'
+import Hero from "./pages/Hero";
 
 // Utilities
 import { initialHistories, getAnalyticsData } from './utils/helpers'
 
 export default function App() {
+  // =========================================================
+  // AUTHENTICATION STATE
+  // =========================================================
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // =========================================================
+  // DASHBOARD STATE
+  // =========================================================
   const [activePage, setActivePage] = useState('overview')
   const [streams, setStreams] = useState({})
   const [streamHistories, setStreamHistories] = useState(initialHistories)
@@ -60,11 +71,29 @@ export default function App() {
   const currentHistory = streamHistories[activeStreamId] || []
 
   /* =========================================================
-     WEBSOCKET CONNECTION
+     WEBSOCKET CONNECTION (Only runs after authentication)
      ========================================================= */
   useEffect(() => {
-    let isUnmounted = false
-    let reconnectTimeout = null
+    // Only connect if the user is authenticated and on the dashboard
+    if (!isAuthenticated) return
+
+    const streamId = uniqueStreamIdRef.current
+    const wsUrl =
+      import.meta.env.VITE_RISK_WS_URL ||
+      `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
+
+    console.log('Connecting Risk WebSocket:', wsUrl)
+
+    const ws = new WebSocket(wsUrl)
+    wsRef.current = ws
+
+    ws.onopen = () => {
+      console.log('Risk WebSocket connected')
+      setIsConnected(true)
+      setIsBackendOnline(true)
+      setMicStatus('Select Security Context')
+      setContextConfigured(false)
+    }
 
     const connect = () => {
       if (isUnmounted) return
@@ -250,7 +279,7 @@ export default function App() {
       wsRef.current = null
       stopMicrophoneStream()
     }
-  }, [])
+  }, [isAuthenticated]) // Re-run effect if authentication status changes
 
   /* =========================================================
      AUDIO HELPERS
@@ -342,10 +371,7 @@ export default function App() {
       type: 'session_context',
       scenario:
         scenario === 'high_value_transaction' ? null : scenario,
-      transaction_amount_inr:
-        scenario === 'high_value_transaction'
-          ? parsedAmount
-          : null
+      transaction_amount_inr: parsedAmount // FIXED: Sending parsedAmount for all scenarios
     }
 
     ws.send(JSON.stringify(payload))
@@ -375,59 +401,63 @@ export default function App() {
         }
       }
 
-      const mediaStream =
-        await navigator.mediaDevices.getUserMedia(constraints)
-
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints)
       mediaStreamRef.current = mediaStream
 
-      const AudioContextClass =
-        window.AudioContext || window.webkitAudioContext
-
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext
       const audioCtx = new AudioContextClass()
       audioContextRef.current = audioCtx
 
       const actualSampleRate = audioCtx.sampleRate
-
-      const source =
-        audioCtx.createMediaStreamSource(mediaStream)
-
+      const source = audioCtx.createMediaStreamSource(mediaStream)
       sourceRef.current = source
 
       const bufferSize = 4096
-
-      const processor =
-        audioCtx.createScriptProcessor(bufferSize, 1, 1)
-
+      const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1)
       processorRef.current = processor
 
       const silentGain = audioCtx.createGain()
       silentGain.gain.value = 0
 
+      // Buffers to accumulate audio and prevent React render spam
+      let pcmBuffer = new Int16Array(0)
+      let rmsAccumulator = 0
+      let rmsCount = 0
+      const CHUNK_SIZE = 8000 // 0.5 seconds at 16kHz to match file upload
+
       processor.onaudioprocess = (event) => {
         const ws = wsRef.current
-
         if (!ws || ws.readyState !== WebSocket.OPEN) return
 
-        const inputData =
-          event.inputBuffer.getChannelData(0)
+        const inputData = event.inputBuffer.getChannelData(0)
+        
+        // 1. Accumulate RMS to average it out over the 500ms chunk
+        rmsAccumulator += calculateRMS(inputData)
+        rmsCount++
 
-        const rms = calculateRMS(inputData)
+        // 2. Resample and convert to PCM16
+        const audio16k = resampleTo16k(inputData, actualSampleRate)
+        const pcm16 = float32ToPCM16(audio16k)
 
-        setMicLevel(
-          Math.min(Math.round(rms * 200), 100)
-        )
+        // 3. Append new samples to our holding buffer
+        const newBuffer = new Int16Array(pcmBuffer.length + pcm16.length)
+        newBuffer.set(pcmBuffer, 0)
+        newBuffer.set(pcm16, pcmBuffer.length)
+        pcmBuffer = newBuffer
 
-        const audio16k =
-          resampleTo16k(
-            inputData,
-            actualSampleRate
-          )
+        // 4. Only send data when we have a full chunk (matches File Stream behavior)
+        while (pcmBuffer.length >= CHUNK_SIZE) {
+          const chunk = pcmBuffer.slice(0, CHUNK_SIZE)
+          ws.send(chunk.buffer)
 
-        const pcm16 =
-          float32ToPCM16(audio16k)
+          // Update UI Mic Level only twice a second (stops React stuttering)
+          const avgRms = rmsCount > 0 ? rmsAccumulator / rmsCount : 0
+          setMicLevel(Math.min(Math.round(avgRms * 200), 100))
 
-        if (pcm16.length > 0) {
-          ws.send(pcm16.buffer)
+          // Reset accumulators and keep remainder of buffer
+          rmsAccumulator = 0
+          rmsCount = 0
+          pcmBuffer = pcmBuffer.slice(CHUNK_SIZE)
         }
       }
 
@@ -440,7 +470,6 @@ export default function App() {
 
       source.connect(monitorGain)
       monitorGain.connect(audioCtx.destination)
-
       monitorGainRef.current = monitorGain
 
       if (audioCtx.state === 'suspended') {
@@ -683,6 +712,16 @@ export default function App() {
     }
   }, [streams])
 
+  // =========================================================
+  // RENDER LOGIC
+  // =========================================================
+
+  // 1. Show Landing Page if not authenticated
+  if (!isAuthenticated) {
+    return <Hero onLogin={() => setIsAuthenticated(true)} />
+  }
+
+  // 2. Show Dashboard if authenticated
   return (
     <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#03040b] font-sans text-white md:flex-row">
 
@@ -719,14 +758,14 @@ export default function App() {
       </div>
 
       {/* =====================================================
-          SIDEBAR
+          SIDEBAR (EXPANDABLE ON HOVER)
           ===================================================== */}
 
-      <aside className="relative z-10 flex w-full flex-col border-b border-white/[0.10] bg-[#060711]/90 p-5 shadow-[8px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl md:h-screen md:w-64 md:shrink-0 md:border-b-0 md:border-r lg:w-72">
+      <aside className="group relative z-20 flex w-full flex-col border-b border-white/[0.10] bg-[#060711]/90 p-4 shadow-[8px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl transition-all duration-300 ease-in-out md:h-screen md:w-24 md:shrink-0 md:border-b-0 md:border-r md:p-5 md:hover:w-64 lg:md:hover:w-72">
 
         {/* BRANDING */}
 
-        <div className="mb-8 flex items-center gap-3">
+        <div className="mb-8 flex items-center gap-3 overflow-hidden">
 
           <div className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan-300/30 bg-gradient-to-br from-cyan-400/20 via-violet-500/20 to-fuchsia-500/20 shadow-[0_0_30px_rgba(34,211,238,0.20)]">
 
@@ -741,7 +780,7 @@ export default function App() {
             <div className="absolute inset-0 rounded-xl bg-cyan-400/10 blur-md" />
           </div>
 
-          <div>
+          <div className="whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
 
             <p className="text-[19px] font-extrabold leading-[0.95] tracking-tight text-white drop-shadow-[0_0_14px_rgba(255,255,255,0.12)]">
               VeriVox
@@ -794,7 +833,7 @@ export default function App() {
               <button
                 key={id}
                 onClick={() => setActivePage(id)}
-                className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border px-4 py-3 text-[13px] font-semibold tracking-[0.01em] transition-all duration-300 ${
+                className={`group/btn relative flex w-full items-center gap-3 overflow-hidden rounded-xl border p-3 text-[13px] font-semibold tracking-[0.01em] transition-all duration-300 ${
                   activePage === id
                     ? 'border-cyan-300/30 bg-gradient-to-r from-cyan-400/[0.14] via-violet-500/[0.12] to-fuchsia-500/[0.10] text-white shadow-[0_0_28px_rgba(34,211,238,0.10),inset_0_1px_0_rgba(255,255,255,0.08)]'
                     : 'border-transparent text-slate-300 hover:border-white/[0.12] hover:bg-white/[0.055] hover:text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.05)]'
@@ -812,49 +851,46 @@ export default function App() {
                 <Icon
                   size={18}
                   strokeWidth={activePage === id ? 2.2 : 1.9}
-                  className={
+                  className={`shrink-0 transition-all ${
                     activePage === id
                       ? 'relative z-10 text-cyan-200 drop-shadow-[0_0_7px_rgba(103,232,249,0.7)]'
-                      : 'relative z-10 text-slate-400 transition-all group-hover:text-cyan-200 group-hover:drop-shadow-[0_0_6px_rgba(103,232,249,0.5)]'
-                  }
+                      : 'relative z-10 text-slate-400 group-hover/btn:text-cyan-200 group-hover/btn:drop-shadow-[0_0_6px_rgba(103,232,249,0.5)]'
+                  }`}
                 />
 
-                <span className="relative z-10">
+                <span className="relative z-10 whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
                   {label}
                 </span>
 
                 {activePage === id && (
-                  <span className="ml-auto size-1.5 rounded-full bg-cyan-300 shadow-[0_0_9px_rgba(103,232,249,0.9)]" />
+                  <span className="ml-auto size-1.5 shrink-0 rounded-full bg-cyan-300 shadow-[0_0_9px_rgba(103,232,249,0.9)] transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100" />
                 )}
               </button>
             )
           )}
         </nav>
 
-        {/* BOTTOM STATUS & ACTIONS */}
+        {/* BOTTOM STATUS, ACTIONS & ADMIN PROFILE */}
 
-        <div className="mt-8 flex flex-col gap-4">
+        <div className="mt- auto flex flex-col gap-3 pt-4">
 
+          {/* RETURN TO HERO BUTTON */}
           <button
-            onClick={() =>
-              setShowInspector((v) => !v)
-            }
-            className="group relative w-full overflow-hidden rounded-xl border border-cyan-300/20 bg-gradient-to-r from-cyan-400/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] px-4 py-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-cyan-200 shadow-[0_0_22px_rgba(34,211,238,0.05)] transition-all duration-300 hover:border-cyan-300/40 hover:bg-cyan-400/10 hover:text-cyan-100 hover:shadow-[0_0_30px_rgba(34,211,238,0.12)]"
+            onClick={() => setIsAuthenticated(false)}
+            className="group/btn relative flex w-full items-center gap-2 overflow-hidden rounded-xl border border-cyan-300/20 bg-gradient-to-r from-cyan-400/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] p-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-cyan-200 shadow-[0_0_22px_rgba(34,211,238,0.05)] transition-all duration-300 hover:border-cyan-300/40 hover:bg-cyan-400/10 hover:text-cyan-100 hover:shadow-[0_0_30px_rgba(34,211,238,0.12)]"
           >
-            <span className="mr-2 text-cyan-400/70">
-              $
-            </span>
+            <LogOut size={16} className="shrink-0 text-cyan-300" />
 
-            {showInspector
-              ? 'hide_contract'
-              : 'inspect_payload'}
-
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-cyan-400/30 transition-transform group-hover:translate-x-0.5 group-hover:text-cyan-300/70">
-              →
-            </span>
+            <div className="flex flex-1 items-center justify-between whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
+              <span>
+                Return to Home
+              </span>
+              <ChevronRight size={14} className="text-cyan-400/50 group-hover/btn:translate-x-0.5" />
+            </div>
           </button>
 
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.11] bg-white/[0.045] p-3.5 text-xs backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          {/* SYSTEM STATUS CARD */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.11] bg-white/[0.045] p-3 text-xs backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
 
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/[0.04] via-transparent to-violet-500/[0.07]" />
 
@@ -871,30 +907,52 @@ export default function App() {
                 }`}
               />
 
-              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-white">
+              <span className="whitespace-nowrap font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-white transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
                 System Status
               </span>
             </div>
 
-            <span className="relative mt-2 block font-mono text-[9px] font-semibold leading-relaxed tracking-[0.08em] text-slate-400">
-              {securityTerminated
-                ? 'TERMINATED · SECURITY ALERT'
-                : isBackendOnline
-                ? isConnected
-                  ? 'BACKEND ONLINE · STREAM ACTIVE'
-                  : 'BACKEND ONLINE'
-                : 'BACKEND OFFLINE'}
-            </span>
-
-            <div className="relative mt-3 h-px w-full bg-gradient-to-r from-cyan-400/20 via-violet-400/10 to-transparent" />
-
-            <div className="relative mt-2 flex items-center justify-between text-[8px] font-mono uppercase tracking-[0.14em] text-slate-500">
-              <span>VERIVOX CORE</span>
-              <span className="text-cyan-300/70">
-                LIVE
+            <div className="hidden whitespace-nowrap transition-opacity duration-300 md:group-hover:block md:opacity-0 md:group-hover:opacity-100">
+              <span className="relative mt-2 block font-mono text-[9px] font-semibold leading-relaxed tracking-[0.08em] text-slate-400">
+                {securityTerminated
+                  ? 'TERMINATED · SECURITY ALERT'
+                  : isBackendOnline
+                  ? isConnected
+                    ? 'BACKEND ONLINE · STREAM ACTIVE'
+                    : 'BACKEND ONLINE'
+                  : 'BACKEND OFFLINE'}
               </span>
+
+              <div className="relative mt-2 h-px w-full bg-gradient-to-r from-cyan-400/20 via-violet-400/10 to-transparent" />
+
+              <div className="relative mt-2 flex items-center justify-between text-[8px] font-mono uppercase tracking-[0.14em] text-slate-500">
+                <span>VERIVOX CORE</span>
+                <span className="text-cyan-300/70">
+                  LIVE
+                </span>
+              </div>
             </div>
           </div>
+
+          {/* ADMIN PROFILE HANDLING */}
+          <div className="relative overflow-hidden rounded-xl border border-white/[0.10] bg-white/[0.03] p-2 transition-all duration-300 hover:border-cyan-300/30 hover:bg-white/[0.06]">
+            <div className="flex items-center gap-3">
+              <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 via-violet-600/20 to-fuchsia-600/20 text-cyan-200">
+                <UserCheck size={18} />
+                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-[#060711] bg-emerald-400" />
+              </div>
+
+              <div className="flex flex-1 flex-col overflow-hidden whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
+                <span className="truncate text-xs font-bold text-slate-200">
+                  Admin
+                </span>
+                <span className="truncate text-[10px] font-mono tracking-wider text-cyan-400/80 uppercase">
+                  Security Admin
+                </span>
+              </div>
+            </div>
+          </div>
+
         </div>
       </aside>
 
