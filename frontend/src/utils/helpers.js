@@ -17,10 +17,18 @@ export function formatScore(value, digits = 3) {
 }
 
 export function getAnalyticsData(selected = {}) {
+  const prosody = selected.prosody || {}
+
   return {
     prosody: {
-      pitch_variance: selected.prosody_pitch_variance ?? null,
-      timing_variance: selected.prosody_timing_variance ?? null,
+      pitch_mean_hz: prosody.pitch_mean_hz ?? null,
+      pitch_std_hz: prosody.pitch_std_hz ?? null,
+      pitch_variance_percent: prosody.pitch_variance_percent ?? null,
+      timing_variance: prosody.timing_variance ?? null,
+      flat_prosody: prosody.flat_prosody ?? null,
+      spoof_probability: prosody.spoof_probability ?? null,
+      signal: prosody.signal ?? "UNAVAILABLE",
+      model_version: prosody.model_version ?? null,
     },
     speaker_verification: {
       match_score: selected.speaker_similarity ?? null,
@@ -28,11 +36,22 @@ export function getAnalyticsData(selected = {}) {
     },
     vocoder_fingerprint: {
       flagged: selected.vocoder_flag ?? false,
-      diagnostic_cues: Array.isArray(selected.diagnostic_cues) ? selected.diagnostic_cues : [],
+      diagnostic_cues: Array.isArray(selected.diagnostic_cues)
+        ? selected.diagnostic_cues
+        : [],
     },
     feature_latency_ms: selected.latency_ms ?? null,
+
     shap_features: Array.isArray(selected.shap_features) ? selected.shap_features : [],
     shap_top_features: Array.isArray(selected.shap_top_features) ? selected.shap_top_features : [],
+
+    shap_features: Array.isArray(selected.shap_features)
+      ? selected.shap_features
+      : [],
+    shap_top_features: Array.isArray(selected.shap_top_features)
+      ? selected.shap_top_features
+      : [],
+
 
     // --- Added for Dual-Stream Trilingual Acoustic Fusion ---
     dual_stream: {

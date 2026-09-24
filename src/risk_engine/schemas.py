@@ -18,6 +18,22 @@ class ModelPrediction(BaseModel):
     ai_probability: float = Field(ge=0.0, le=1.0)
     model_version: str
 
+class ProsodyAnalysis(BaseModel):
+    pitch_mean_hz: float | None = None
+    pitch_std_hz: float | None = None
+    pitch_variance_percent: float | None = None
+    timing_variance: float | None = None
+    flat_prosody: bool | None = None
+
+    # Supporting ML evidence. This does not replace ai_probability.
+    spoof_probability: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+    )
+    signal: str = "UNAVAILABLE"
+    model_version: str | None = None
+
 
 class RiskResult(BaseModel):
     schema_version: str = "1.0"
@@ -62,9 +78,7 @@ class RiskResult(BaseModel):
     # sets these) keep working unchanged.
 
     # Feature 1 — Prosody
-    prosody_pitch_variance: float | None = None
-    prosody_timing_variance: float | None = None
-    flat_prosody_flag: bool = False
+    prosody: ProsodyAnalysis = Field(default_factory=ProsodyAnalysis)
 
     # Feature 2 — Speaker Verification
     speaker_id: str | None = None
@@ -92,4 +106,8 @@ class RiskResult(BaseModel):
     modality_gate_alpha: float | None = None
     dual_stream_latency_ms: float | None = None
     target_languages: list[str] = Field(default_factory=lambda: ["en", "hi", "ta"])
+<<<<<<< HEAD
     ensemble_mode: str = "xgb_mms300m_fusion"
+=======
+    ensemble_mode: str = "xgb_mms300m_fusion"
+>>>>>>> origin/feature/audio-features-dataset

@@ -35,10 +35,20 @@ async def main():
 
         async def send_all():
             bytes_per_chunk = CHUNK_SAMPLES * 2
+
             for i in range(0, len(pcm_bytes), bytes_per_chunk):
                 await ws.send(pcm_bytes[i:i + bytes_per_chunk])
                 await asyncio.sleep(0.02)
-            print(f"[client] sent {len(pcm_bytes)} bytes, waiting...\n")
+
+            # Tell the server that there will be no more audio.
+            await ws.send(json.dumps({
+                "type": "end_stream"
+            }))
+
+            print(
+                f"[client] sent {len(pcm_bytes)} bytes, "
+                f"sent end_stream, waiting...\n"
+            )
 
         send_task = asyncio.create_task(send_all())
 
