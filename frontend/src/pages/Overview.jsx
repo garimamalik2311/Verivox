@@ -15,7 +15,8 @@ import {
   Waves,
   Bell,
   ShieldAlert,
-  CheckCircle2
+  CheckCircle2,
+  Cpu
 } from 'lucide-react'
 
 import AudioPlaybackBar from '../components/AudioPlaybackBar'

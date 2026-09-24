@@ -33,5 +33,14 @@ export function getAnalyticsData(selected = {}) {
     feature_latency_ms: selected.latency_ms ?? null,
     shap_features: Array.isArray(selected.shap_features) ? selected.shap_features : [],
     shap_top_features: Array.isArray(selected.shap_top_features) ? selected.shap_top_features : [],
+
+    // --- Added for Dual-Stream Trilingual Acoustic Fusion ---
+    dual_stream: {
+      probability: selected.dual_stream_probability ?? null,
+      risk: selected.dual_stream_risk ?? null,
+      alpha: selected.modality_gate_alpha ?? 0.64,
+      latency_ms: selected.dual_stream_latency_ms ?? null,
+      languages: selected.target_languages ?? ['en', 'hi', 'ta']
+    }
   }
 }
