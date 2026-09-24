@@ -1489,9 +1489,9 @@ async def audio_websocket_endpoint(
                         )
 
                         if prosody_spoof_probability >= 0.70:
-                            prosody_signal = "SPOOF_INDICATOR"
+                            prosody_signal = "SPOOF_SUPPORT"
                         elif prosody_spoof_probability is not None and prosody_spoof_probability < 0.30:
-                            prosody_signal = "NO_SPOOF_INDICATOR"
+                            prosody_signal = "BONAFIDE_SUPPORT"
                         else:
                             prosody_signal = "INCONCLUSIVE"
 
