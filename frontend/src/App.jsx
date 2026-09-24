@@ -584,6 +584,14 @@ export default function App() {
             clearInterval(fileIntervalRef.current)
             fileIntervalRef.current = null
 
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'audio_end',
+                })
+              )
+            }
+
             setMicLevel(0)
             setMicStatus('File Stream Complete')
 

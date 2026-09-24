@@ -30,3 +30,13 @@ data_processed_v2_check/
 .env.*
 !.env.example
 pretrained_models/
+data_raw.zip
+
+# Local Python environment
+.venv-mac/
+
+# Local backup copies
+src/websocket/server.py.bak-prosody
+src/websocket/server.py.before_audio_end
+src/websocket/server.py.before_language_free_prosody
+src/websocket/server.py.before_yin_restore
