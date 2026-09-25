@@ -19,12 +19,14 @@ joblib==1.6.0
 shap>=0.44.0
 speechbrain>=1.0.0
 torch>=2.1.0
+transformers>=4.36.0
 
 # API, WebSockets & Server Integration
 fastapi
 uvicorn[standard]
 websockets
 httpx
+python-multipart>=0.0.6
 
 # Visualization & Reporting
 matplotlib>=3.8.0

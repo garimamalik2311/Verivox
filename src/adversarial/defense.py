@@ -212,7 +212,7 @@ def harmonic_spectral_inpainting(
         purified = purified / max_val
 
     return np.clip(purified, -1.0, 1.0).astype(np.float32)
- 
+
 def normalize_pitch_formants(audio: np.ndarray, sr: int = 16000) -> np.ndarray:
     """
     Formant-Preserving Vocal Centering:
