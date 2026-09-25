@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   UserCheck,
   ChevronRight,
-  Terminal
+  LogOut
 } from 'lucide-react'
 
 // Sub-components
@@ -20,11 +20,25 @@ import History from './pages/History'
 import Architecture from './pages/Architecture'
 import AdversarialRobustness from './components/AdversarialRobustness'
 import SecurityReport from './pages/SecurityReport'
+import Hero from "./pages/Hero";
+import Admin from "./pages/Admin";
 
 // Utilities
 import { initialHistories, getAnalyticsData } from './utils/helpers'
 
-export default function App() {
+// 1. Import the provider
+import { SecurityProvider } from './context/SecurityContext'
+
+// Renamed your original component to MainApp to keep all its internal logic intact
+function MainApp() {
+  // =========================================================
+  // AUTHENTICATION STATE
+  // =========================================================
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // =========================================================
+  // DASHBOARD STATE
+  // =========================================================
   const [activePage, setActivePage] = useState('overview')
   const [streams, setStreams] = useState({})
   const [streamHistories, setStreamHistories] = useState(initialHistories)
@@ -35,11 +49,29 @@ export default function App() {
   const [micStatus, setMicStatus] = useState('Disconnected')
   const [securityTerminated, setSecurityTerminated] = useState(false)
   const [micLevel, setMicLevel] = useState(0)
+  const [liveWaveform, setLiveWaveform] = useState([])
   const [showInspector, setShowInspector] = useState(false)
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false)
+  const [isFilePlaying, setIsFilePlaying] = useState(false)
+  const [uploadedAudioUrl, setUploadedAudioUrl] = useState('')
+  const [filePlaybackTime, setFilePlaybackTime] = useState(0)
+  const [fileDuration, setFileDuration] = useState(0)
+  const [fileWaveform, setFileWaveform] = useState([])
   const [transactionAmountInr, setTransactionAmountInr] = useState('525000')
   const [selectedScenario, setSelectedScenario] = useState('high_value_transaction')
   const [contextConfigured, setContextConfigured] = useState(false)
+  const [transcript, setTranscript] = useState({
+    text: '',
+    language: null,
+    segments: [],
+    audio_start: 0,
+    audio_end: 0,
+    is_final: false,
+    complete: false
+  })
+  
+  // NEW: State to hold the incident data being sent to the Admin board
+  const [escalatedIncident, setEscalatedIncident] = useState(null)
 
   // Refs for WebSockets and Audio
   const monitorGainRef = useRef(null)
@@ -50,6 +82,8 @@ export default function App() {
   const audioContextRef = useRef(null)
   const mediaStreamRef = useRef(null)
   const processorRef = useRef(null)
+  const uploadedAudioRef = useRef(null)
+  const uploadedAudioUrlRef = useRef(null)
   const sourceRef = useRef(null)
   const fileIntervalRef = useRef(null)
   const fileStreamActiveRef = useRef(false)
@@ -62,37 +96,54 @@ export default function App() {
   const currentHistory = streamHistories[activeStreamId] || []
 
   /* =========================================================
-     WEBSOCKET CONNECTION
+     WEBSOCKET CONNECTION (Only runs after authentication)
      ========================================================= */
   useEffect(() => {
-    const streamId = uniqueStreamIdRef.current
-    const wsUrl =
-      import.meta.env.VITE_RISK_WS_URL ||
-      `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
+    // Only connect if the user is authenticated and on the dashboard
+    if (!isAuthenticated) return
 
-    console.log('Connecting Risk WebSocket:', wsUrl)
+    let isUnmounted = false
+    let reconnectTimeout = null
 
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
+    const connect = () => {
+      if (isUnmounted) return
 
-    ws.onopen = () => {
-      console.log('Risk WebSocket connected')
-      setIsConnected(true)
-      setIsBackendOnline(true)
-      setMicStatus('Select Security Context')
-      setContextConfigured(false)
-    }
+      const streamId = uniqueStreamIdRef.current
+      const wsUrl =
+        import.meta.env.VITE_RISK_WS_URL ||
+        `ws://127.0.0.1:8000/ws/audio?stream_id=${streamId}`
 
-    ws.onclose = () => {
-      console.log('Risk WebSocket closed')
-      setIsConnected(false)
-      setIsBackendOnline(securityTerminatedRef.current)
-      setMicStatus(
-        securityTerminatedRef.current
-          ? 'STREAM TERMINATED — SECURITY ALERT'
-          : 'Disconnected'
-      )
-    }
+      console.log('Connecting Risk WebSocket:', wsUrl)
+
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        console.log('Risk WebSocket connected')
+        setIsConnected(true)
+        setIsBackendOnline(true)
+        setMicStatus('Select Security Context')
+        setContextConfigured(false)
+      }
+
+      ws.onclose = () => {
+        console.log('Risk WebSocket closed')
+        setIsConnected(false)
+        setIsBackendOnline(securityTerminatedRef.current)
+        setMicStatus(
+          securityTerminatedRef.current
+            ? 'STREAM TERMINATED — SECURITY ALERT'
+            : 'Disconnected'
+        )
+
+        // Automatically attempt reconnection if not security-terminated
+        if (!isUnmounted && !securityTerminatedRef.current) {
+          reconnectTimeout = setTimeout(() => {
+            console.log('Attempting WebSocket reconnect...')
+            connect()
+          }, 2000)
+        }
+      }
 
     ws.onerror = (error) => {
       console.error('Risk WebSocket error:', error)
@@ -108,7 +159,29 @@ export default function App() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data)
-        console.log('RiskResult:', data)
+        console.log('WebSocket message:', data)
+
+        if (data.type === 'transcript_snapshot') {
+          console.log('[STT] transcript_snapshot received:', data)
+          setTranscript({
+            text: data.text || '',
+            language: data.language || null,
+            segments: Array.isArray(data.segments) ? data.segments : [],
+            audio_start: Number(data.audio_start ?? 0),
+            audio_end: Number(data.audio_end ?? 0),
+            is_final: data.is_final === true,
+            complete: false
+          })
+          return
+        }
+
+        if (data.type === 'transcript_complete') {
+          setTranscript((prev) => ({
+            ...prev,
+            complete: true
+          }))
+          return
+        }
 
         if (data.type === 'session_context_ack') {
           console.log('Session context acknowledged:', data)
@@ -217,22 +290,28 @@ export default function App() {
       }
     }
 
+    }
+
+    connect()
+
     return () => {
+      isUnmounted = true
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
       if (
-        ws.readyState === WebSocket.CONNECTING ||
-        ws.readyState === WebSocket.OPEN
+        wsRef.current &&
+        (wsRef.current.readyState === WebSocket.CONNECTING ||
+          wsRef.current.readyState === WebSocket.OPEN)
       ) {
-        console.log('Cleaning up Risk WebSocket:', wsUrl)
-        ws.close()
+        console.log('Cleaning up Risk WebSocket')
+        wsRef.current.close()
       }
 
-      if (wsRef.current === ws) {
-        wsRef.current = null
-      }
-
+      wsRef.current = null
       stopMicrophoneStream()
     }
-  }, [])
+  }, [isAuthenticated]) // Re-run effect if authentication status changes
 
   /* =========================================================
      AUDIO HELPERS
@@ -324,7 +403,7 @@ export default function App() {
       type: 'session_context',
       scenario:
         scenario === 'high_value_transaction' ? null : scenario,
-      transaction_amount_inr: parsedAmount // FIXED: Sending parsedAmount for all scenarios
+      transaction_amount_inr: parsedAmount 
     }
 
     ws.send(JSON.stringify(payload))
@@ -372,11 +451,10 @@ export default function App() {
       const silentGain = audioCtx.createGain()
       silentGain.gain.value = 0
 
-      // Buffers to accumulate audio and prevent React render spam
       let pcmBuffer = new Int16Array(0)
       let rmsAccumulator = 0
       let rmsCount = 0
-      const CHUNK_SIZE = 8000 // 0.5 seconds at 16kHz to match file upload
+      const CHUNK_SIZE = 8000 
 
       processor.onaudioprocess = (event) => {
         const ws = wsRef.current
@@ -384,30 +462,28 @@ export default function App() {
 
         const inputData = event.inputBuffer.getChannelData(0)
         
-        // 1. Accumulate RMS to average it out over the 500ms chunk
         rmsAccumulator += calculateRMS(inputData)
         rmsCount++
 
-        // 2. Resample and convert to PCM16
         const audio16k = resampleTo16k(inputData, actualSampleRate)
         const pcm16 = float32ToPCM16(audio16k)
 
-        // 3. Append new samples to our holding buffer
         const newBuffer = new Int16Array(pcmBuffer.length + pcm16.length)
         newBuffer.set(pcmBuffer, 0)
         newBuffer.set(pcm16, pcmBuffer.length)
         pcmBuffer = newBuffer
 
-        // 4. Only send data when we have a full chunk (matches File Stream behavior)
         while (pcmBuffer.length >= CHUNK_SIZE) {
           const chunk = pcmBuffer.slice(0, CHUNK_SIZE)
           ws.send(chunk.buffer)
 
-          // Update UI Mic Level only twice a second (stops React stuttering)
           const avgRms = rmsCount > 0 ? rmsAccumulator / rmsCount : 0
+          setLiveWaveform((prev) => {
+            const next = [...prev, avgRms]
+            return next.slice(-72)
+          })
           setMicLevel(Math.min(Math.round(avgRms * 200), 100))
 
-          // Reset accumulators and keep remainder of buffer
           rmsAccumulator = 0
           rmsCount = 0
           pcmBuffer = pcmBuffer.slice(CHUNK_SIZE)
@@ -492,6 +568,54 @@ export default function App() {
     setIsLiveMonitoring(next)
   }
 
+  const buildFileWaveform = async (file) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext
+      if (!AudioCtx) return
+
+      const audioContext = new AudioCtx()
+      const arrayBuffer = await file.arrayBuffer()
+      const decoded = await audioContext.decodeAudioData(arrayBuffer.slice(0))
+      const channel = decoded.getChannelData(0)
+
+      const bars = 72
+      const blockSize = Math.max(1, Math.floor(channel.length / bars))
+      const peaks = Array.from({ length: bars }, (_, index) => {
+        const start = index * blockSize
+        const end = Math.min(channel.length, start + blockSize)
+        let peak = 0
+
+        for (let i = start; i < end; i += 1) {
+          peak = Math.max(peak, Math.abs(channel[i]))
+        }
+
+        return Math.max(0.08, Math.min(1, peak))
+      })
+
+      setFileWaveform(peaks)
+      setFileDuration(decoded.duration)
+      await audioContext.close()
+    } catch (error) {
+      console.warn('Waveform generation failed:', error)
+      setFileWaveform([])
+    }
+  }
+
+  const toggleFilePlayback = async () => {
+    const audio = uploadedAudioRef.current
+    if (!audio) return
+
+    try {
+      if (audio.paused) {
+        await audio.play()
+      } else {
+        audio.pause()
+      }
+    } catch (error) {
+      console.error('Uploaded audio playback error:', error)
+    }
+  }
+
   /* =========================================================
      AUDIO FILE STREAMING
      ========================================================= */
@@ -509,6 +633,45 @@ export default function App() {
 
     try {
       stopMicrophoneStream()
+
+      if (uploadedAudioRef.current) {
+        uploadedAudioRef.current.pause()
+        uploadedAudioRef.current.src = ''
+        uploadedAudioRef.current = null
+      }
+
+      if (uploadedAudioUrlRef.current) {
+        URL.revokeObjectURL(uploadedAudioUrlRef.current)
+      }
+
+      const objectUrl = URL.createObjectURL(file)
+      uploadedAudioUrlRef.current = objectUrl
+      setUploadedAudioUrl(objectUrl)
+
+      const audioElement = new Audio(objectUrl)
+      audioElement.preload = 'metadata'
+      audioElement.onplay = () => setIsFilePlaying(true)
+      audioElement.onpause = () => setIsFilePlaying(false)
+      audioElement.ontimeupdate = () => {
+        setFilePlaybackTime(audioElement.currentTime)
+      }
+      audioElement.onloadedmetadata = () => {
+        if (Number.isFinite(audioElement.duration)) {
+          setFileDuration(audioElement.duration)
+        }
+      }
+      audioElement.onended = () => {
+        setIsFilePlaying(false)
+        setFilePlaybackTime(0)
+        audioElement.currentTime = 0
+      }
+
+      uploadedAudioRef.current = audioElement
+
+      setFilePlaybackTime(0)
+      setFileDuration(0)
+      setFileWaveform([])
+      buildFileWaveform(file)
 
       setInputMode('file')
       setMicStatus(`Preparing: ${file.name}`)
@@ -572,6 +735,14 @@ export default function App() {
             clearInterval(fileIntervalRef.current)
             fileIntervalRef.current = null
 
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(
+                JSON.stringify({
+                  type: 'audio_end',
+                })
+              )
+            }
+
             setMicLevel(0)
             setMicStatus('File Stream Complete')
 
@@ -586,7 +757,7 @@ export default function App() {
               offset + chunkSize
             )
 
-          ws.send(chunk.buffer)
+          ws.send(chunk)
 
           const chunkRms =
             calculateRMS(
@@ -635,6 +806,12 @@ export default function App() {
       setMicStatus('Stream frozen after alert')
     }
 
+    // NEW: Save the incident to be displayed in the Admin panel
+    setEscalatedIncident({
+      ...selected,
+      streamId: activeStreamId
+    })
+
     setStreams((prev) => ({
       ...prev,
       [activeStreamId]: {
@@ -642,6 +819,15 @@ export default function App() {
         alert_triggered: false
       }
     }))
+
+    // NEW: Switch to the admin page immediately
+    setActivePage('admin')
+  }
+
+  // NEW: Handler for the Admin dashboard to clear the alert
+  const handleResolveIncident = (actionType) => {
+    console.log(`Admin took action: ${actionType}`)
+    setEscalatedIncident(null)
   }
 
   const summary = useMemo(() => {
@@ -665,38 +851,37 @@ export default function App() {
     }
   }, [streams])
 
+  // =========================================================
+  // RENDER LOGIC
+  // =========================================================
+
+  // 1. Show Landing Page if not authenticated
+  if (!isAuthenticated) {
+    return <Hero onLogin={() => setIsAuthenticated(true)} />
+  }
+
+  // 2. Show Dashboard if authenticated
   return (
-    <main className="relative flex min-h-screen flex-col overflow-hidden bg-[#03040b] font-sans text-white md:flex-row">
+    <main className="verivox-dashboard relative flex min-h-screen flex-col overflow-hidden bg-[#03040b] font-sans text-white md:flex-row">
 
       {/* =====================================================
           AURORA BACKGROUND
           ===================================================== */}
 
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-
-        {/* Aurora glow */}
-        <div className="absolute -left-40 -top-40 h-[560px] w-[560px] rounded-full bg-cyan-400/[0.13] blur-[150px]" />
-
+        <div className="absolute -left-40 -top-40 h-[560px] w-[560px] rounded-full bg-blue-600/[0.13] blur-[150px]" />
         <div className="absolute right-[-180px] top-[5%] h-[650px] w-[650px] rounded-full bg-violet-500/[0.16] blur-[170px]" />
-
         <div className="absolute bottom-[-240px] left-[20%] h-[600px] w-[800px] rounded-full bg-fuchsia-500/[0.10] blur-[180px]" />
-
         <div className="absolute bottom-[0%] right-[12%] h-[400px] w-[400px] rounded-full bg-emerald-400/[0.08] blur-[140px]" />
-
-        {/* subtle cyan beam */}
-        <div className="absolute left-[38%] top-[-10%] h-[750px] w-[1px] rotate-[24deg] bg-gradient-to-b from-transparent via-cyan-300/[0.10] to-transparent blur-[1px]" />
-
-        {/* technical grid */}
+        <div className="absolute left-[38%] top-[-10%] h-[750px] w-[1px] rotate-[24deg] bg-gradient-to-b from-transparent via-blue-500/[0.10] to-transparent blur-[1px]" />
         <div
-          className="absolute inset-0 opacity-[0.045]"
+          className="absolute inset-0 opacity-[0.025]"
           style={{
             backgroundImage:
-              'linear-gradient(rgba(148,163,184,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.35) 1px, transparent 1px)',
+              'linear-gradient(rgba(37,99,235,0.20) 1px, transparent 1px), linear-gradient(90deg, rgba(37,99,235,0.20) 1px, transparent 1px)',
             backgroundSize: '42px 42px'
           }}
         />
-
-        {/* vignette */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_30%,rgba(2,3,10,0.72)_100%)]" />
       </div>
 
@@ -704,23 +889,23 @@ export default function App() {
           SIDEBAR (EXPANDABLE ON HOVER)
           ===================================================== */}
 
-      <aside className="group relative z-20 flex w-full flex-col border-b border-white/[0.10] bg-[#060711]/90 p-4 shadow-[8px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl transition-all duration-300 ease-in-out md:h-screen md:w-24 md:shrink-0 md:border-b-0 md:border-r md:p-5 md:hover:w-64 lg:md:hover:w-72">
+      <aside className="verivox-sidebar group relative z-20 flex w-full flex-col border-b border-white/[0.10] bg-[#060711]/90 p-4 shadow-[8px_0_40px_rgba(0,0,0,0.18)] backdrop-blur-2xl transition-all duration-300 ease-in-out md:h-screen md:w-24 md:shrink-0 md:border-b-0 md:border-r md:p-5 md:hover:w-64 lg:md:hover:w-72">
 
         {/* BRANDING */}
 
         <div className="mb-8 flex items-center gap-3 overflow-hidden">
 
-          <div className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-cyan-300/30 bg-gradient-to-br from-cyan-400/20 via-violet-500/20 to-fuchsia-500/20 shadow-[0_0_30px_rgba(34,211,238,0.20)]">
+          <div className="relative flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-blue-500/30 bg-gradient-to-br from-blue-600/20 via-violet-500/20 to-fuchsia-500/20 shadow-[0_0_30px_rgba(36,84,216,0.20)]">
 
-            <div className="absolute inset-0 bg-gradient-to-br from-cyan-300/10 to-fuchsia-400/10" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-fuchsia-400/10" />
 
             <ShieldCheck
               size={23}
               strokeWidth={2.2}
-              className="relative z-10 text-cyan-200 drop-shadow-[0_0_8px_rgba(103,232,249,0.8)]"
+              className="relative z-10 text-blue-200 drop-shadow-[0_0_8px_rgba(79,123,232,0.8)]"
             />
 
-            <div className="absolute inset-0 rounded-xl bg-cyan-400/10 blur-md" />
+            <div className="absolute inset-0 rounded-xl bg-blue-600/10 blur-md" />
           </div>
 
           <div className="whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
@@ -729,7 +914,7 @@ export default function App() {
               VeriVox
             </p>
 
-            <p className="mt-1 bg-gradient-to-r from-cyan-200 via-violet-200 to-fuchsia-200 bg-clip-text text-[9px] font-mono font-semibold uppercase tracking-[0.24em] text-transparent">
+            <p className="mt-1 bg-gradient-to-r from-blue-200 via-violet-200 to-fuchsia-200 bg-clip-text text-[9px] font-mono font-semibold uppercase tracking-[0.24em] text-transparent">
               Neural Guard
             </p>
 
@@ -778,16 +963,16 @@ export default function App() {
                 onClick={() => setActivePage(id)}
                 className={`group/btn relative flex w-full items-center gap-3 overflow-hidden rounded-xl border p-3 text-[13px] font-semibold tracking-[0.01em] transition-all duration-300 ${
                   activePage === id
-                    ? 'border-cyan-300/30 bg-gradient-to-r from-cyan-400/[0.14] via-violet-500/[0.12] to-fuchsia-500/[0.10] text-white shadow-[0_0_28px_rgba(34,211,238,0.10),inset_0_1px_0_rgba(255,255,255,0.08)]'
-                    : 'border-transparent text-slate-300 hover:border-white/[0.12] hover:bg-white/[0.055] hover:text-white hover:shadow-[0_0_20px_rgba(34,211,238,0.05)]'
+                    ? 'border-blue-500/30 bg-gradient-to-r from-blue-600/[0.14] via-violet-500/[0.12] to-fuchsia-500/[0.10] text-white shadow-[0_0_28px_rgba(36,84,216,0.10),inset_0_1px_0_rgba(255,255,255,0.08)]'
+                    : 'border-transparent text-slate-300 hover:border-white/[0.12] hover:bg-white/[0.055] hover:text-white hover:shadow-[0_0_20px_rgba(36,84,216,0.05)]'
                 }`}
               >
 
                 {activePage === id && (
                   <>
-                    <span className="absolute left-0 top-1/2 h-8 w-[2px] -translate-y-1/2 rounded-full bg-gradient-to-b from-cyan-300 via-violet-400 to-fuchsia-400 shadow-[0_0_12px_rgba(34,211,238,0.9)]" />
+                    <span className="absolute left-0 top-1/2 h-8 w-[2px] -translate-y-1/2 rounded-full bg-gradient-to-b from-blue-500 via-violet-400 to-fuchsia-400 shadow-[0_0_12px_rgba(36,84,216,0.9)]" />
 
-                    <span className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-cyan-300/[0.07] to-transparent" />
+                    <span className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-blue-500/[0.07] to-transparent" />
                   </>
                 )}
 
@@ -796,8 +981,8 @@ export default function App() {
                   strokeWidth={activePage === id ? 2.2 : 1.9}
                   className={`shrink-0 transition-all ${
                     activePage === id
-                      ? 'relative z-10 text-cyan-200 drop-shadow-[0_0_7px_rgba(103,232,249,0.7)]'
-                      : 'relative z-10 text-slate-400 group-hover/btn:text-cyan-200 group-hover/btn:drop-shadow-[0_0_6px_rgba(103,232,249,0.5)]'
+                      ? 'relative z-10 text-blue-200 drop-shadow-[0_0_7px_rgba(79,123,232,0.7)]'
+                      : 'relative z-10 text-slate-400 group-hover/btn:text-blue-200 group-hover/btn:drop-shadow-[0_0_6px_rgba(79,123,232,0.5)]'
                   }`}
                 />
 
@@ -806,39 +991,41 @@ export default function App() {
                 </span>
 
                 {activePage === id && (
-                  <span className="ml-auto size-1.5 shrink-0 rounded-full bg-cyan-300 shadow-[0_0_9px_rgba(103,232,249,0.9)] transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100" />
+                  <span className="ml-auto size-1.5 shrink-0 rounded-full bg-blue-500 shadow-[0_0_9px_rgba(79,123,232,0.9)] transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100" />
                 )}
               </button>
             )
           )}
         </nav>
 
+        {/* THEME CONTROL */}
+
+        <div className="mt-auto flex items-center justify-center border-t border-white/[0.06] pt-4 md:justify-start">
+        </div>
+
         {/* BOTTOM STATUS, ACTIONS & ADMIN PROFILE */}
 
-        <div className="mt- auto flex flex-col gap-3 pt-4">
+        <div className="mt-3 flex flex-col gap-3 pt-0">
 
-          {/* INSPECT PAYLOAD BUTTON */}
+          {/* RETURN TO HERO BUTTON */}
           <button
-            onClick={() =>
-              setShowInspector((v) => !v)
-            }
-            className="group/btn relative flex w-full items-center gap-2 overflow-hidden rounded-xl border border-cyan-300/20 bg-gradient-to-r from-cyan-400/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] p-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-cyan-200 shadow-[0_0_22px_rgba(34,211,238,0.05)] transition-all duration-300 hover:border-cyan-300/40 hover:bg-cyan-400/10 hover:text-cyan-100 hover:shadow-[0_0_30px_rgba(34,211,238,0.12)]"
+            onClick={() => setIsAuthenticated(false)}
+            className="group/btn relative flex w-full items-center gap-2 overflow-hidden rounded-xl border border-blue-500/20 bg-gradient-to-r from-blue-600/[0.07] via-violet-500/[0.05] to-fuchsia-500/[0.06] p-2.5 text-left text-[11px] font-mono font-semibold tracking-wide text-blue-200 shadow-[0_0_22px_rgba(36,84,216,0.05)] transition-all duration-300 hover:border-blue-500/40 hover:bg-blue-600/10 hover:text-blue-100 hover:shadow-[0_0_30px_rgba(36,84,216,0.12)]"
           >
-            <Terminal size={16} className="shrink-0 text-cyan-300" />
+            <LogOut size={16} className="shrink-0 text-blue-500" />
 
             <div className="flex flex-1 items-center justify-between whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
               <span>
-                <span className="mr-1 text-cyan-400/70">$</span>
-                {showInspector ? 'hide_contract' : 'inspect_payload'}
+                Return to Home
               </span>
-              <ChevronRight size={14} className="text-cyan-400/50 group-hover/btn:translate-x-0.5" />
+              <ChevronRight size={14} className="text-blue-600/50 group-hover/btn:translate-x-0.5" />
             </div>
           </button>
 
           {/* SYSTEM STATUS CARD */}
           <div className="relative overflow-hidden rounded-xl border border-white/[0.11] bg-white/[0.045] p-3 text-xs backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
 
-            <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/[0.04] via-transparent to-violet-500/[0.07]" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/[0.04] via-transparent to-violet-500/[0.07]" />
 
             <div className="relative flex items-center gap-2.5">
 
@@ -849,7 +1036,7 @@ export default function App() {
                     ? 'bg-amber-300 shadow-[0_0_14px_rgba(252,211,77,1)]'
                     : isBackendOnline
                     ? 'bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.9)] animate-pulse'
-                    : 'bg-cyan-300 shadow-[0_0_12px_rgba(34,211,238,0.9)]'
+                    : 'bg-blue-500 shadow-[0_0_12px_rgba(36,84,216,0.9)]'
                 }`}
               />
 
@@ -869,11 +1056,11 @@ export default function App() {
                   : 'BACKEND OFFLINE'}
               </span>
 
-              <div className="relative mt-2 h-px w-full bg-gradient-to-r from-cyan-400/20 via-violet-400/10 to-transparent" />
+              <div className="relative mt-2 h-px w-full bg-gradient-to-r from-blue-600/20 via-violet-400/10 to-transparent" />
 
               <div className="relative mt-2 flex items-center justify-between text-[8px] font-mono uppercase tracking-[0.14em] text-slate-500">
                 <span>VERIVOX CORE</span>
-                <span className="text-cyan-300/70">
+                <span className="text-blue-500/70">
                   LIVE
                 </span>
               </div>
@@ -881,23 +1068,34 @@ export default function App() {
           </div>
 
           {/* ADMIN PROFILE HANDLING */}
-          <div className="relative overflow-hidden rounded-xl border border-white/[0.10] bg-white/[0.03] p-2 transition-all duration-300 hover:border-cyan-300/30 hover:bg-white/[0.06]">
-            <div className="flex items-center gap-3">
-              <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg border border-cyan-400/30 bg-gradient-to-br from-cyan-500/20 via-violet-600/20 to-fuchsia-600/20 text-cyan-200">
-                <UserCheck size={18} />
-                <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-[#060711] bg-emerald-400" />
-              </div>
+<button 
+  onClick={() => setActivePage('admin')}
+  className={`group/admin relative flex w-full overflow-hidden rounded-xl border p-2 transition-all duration-300 text-left ${
+    activePage === 'admin'
+      ? 'border-blue-500/40 bg-gradient-to-r from-blue-600/[0.14] via-violet-500/[0.12] to-fuchsia-500/[0.10] shadow-[0_0_20px_rgba(36,84,216,0.15)]'
+      : 'border-white/[0.10] bg-white/[0.03] hover:border-blue-500/30 hover:bg-white/[0.06]'
+  }`}
+>
+  <div className="flex items-center gap-3 w-full">
+    <div className={`relative flex size-9 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+      activePage === 'admin' 
+        ? 'border-blue-500 bg-blue-600/30 text-white' 
+        : 'border-blue-600/30 bg-gradient-to-br from-blue-500/20 via-violet-600/20 to-fuchsia-600/20 text-blue-200'
+    }`}>
+      <UserCheck size={18} />
+      <span className="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border border-[#060711] bg-emerald-400" />
+    </div>
 
-              <div className="flex flex-1 flex-col overflow-hidden whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
-                <span className="truncate text-xs font-bold text-slate-200">
-                  Admin
-                </span>
-                <span className="truncate text-[10px] font-mono tracking-wider text-cyan-400/80 uppercase">
-                  Security Admin
-                </span>
-              </div>
-            </div>
-          </div>
+    <div className="flex flex-1 flex-col overflow-hidden whitespace-nowrap transition-opacity duration-300 md:opacity-0 md:group-hover:opacity-100">
+      <span className={`truncate text-xs font-bold ${activePage === 'admin' ? 'text-white' : 'text-slate-200'}`}>
+        Admin
+      </span>
+      <span className="truncate text-[10px] font-mono tracking-wider text-blue-600/80 uppercase">
+        Security Admin
+      </span>
+    </div>
+  </div>
+</button>
 
         </div>
       </aside>
@@ -915,6 +1113,7 @@ export default function App() {
               micStatus={micStatus}
               inputMode={inputMode}
               micLevel={micLevel}
+              liveWaveform={liveWaveform}
               isLiveMonitoring={isLiveMonitoring}
               selected={selected}
               activeStreamId={activeStreamId}
@@ -940,6 +1139,13 @@ export default function App() {
               }}
               contextConfigured={contextConfigured}
               configureSecurityContext={configureSecurityContext}
+              transcript={transcript}
+              isFilePlaying={isFilePlaying}
+              uploadedAudioUrl={uploadedAudioUrl}
+              toggleFilePlayback={toggleFilePlayback}
+              filePlaybackTime={filePlaybackTime}
+              fileDuration={fileDuration}
+              fileWaveform={fileWaveform}
             />
           )}
 
@@ -947,6 +1153,16 @@ export default function App() {
             <div className="mx-auto max-w-6xl space-y-8">
               <AdversarialRobustness />
             </div>
+          )}
+          {activePage === 'how' && <Architecture />}
+          
+          {/* UPDATED ADMIN COMPONENT W/ NEW PROPS */}
+          {activePage === 'admin' && (
+            <Admin 
+              escalatedIncident={escalatedIncident}
+              onResolveIncident={handleResolveIncident}
+              selected={selected} activeStreamId={activeStreamId}
+            />
           )}
 
           {activePage === 'analytics' && (
@@ -979,5 +1195,14 @@ export default function App() {
         </div>
       </div>
     </main>
+  )
+}
+
+// 2. Wrap the entire application components/routes inside the provider
+export default function App() {
+  return (
+    <SecurityProvider>
+      <MainApp />
+    </SecurityProvider>
   )
 }

@@ -35,6 +35,7 @@ from src.speaker_registry import (
     parse_speaker_id_from_query,
 )
 from src.speaker_verifier import SpeakerVerifier
+from src.transcription import StreamingTranscriber, transcriber
 
 
 app = FastAPI()
@@ -84,6 +85,54 @@ def get_prosody_buffer(stream_id: str) -> ProsodyBuffer:
         prosody_buffers[stream_id] = ProsodyBuffer()
 
     return prosody_buffers[stream_id]
+
+
+async def transcribe_snapshot_and_send(
+    websocket: WebSocket,
+    stream_id: str,
+    stt_stream: StreamingTranscriber,
+    snapshot: tuple[np.ndarray, int],
+    is_final: bool = False,
+) -> None:
+    """Run Whisper on an immutable audio snapshot and send it to the UI."""
+
+    try:
+        audio, start_sample = snapshot
+
+        result = await asyncio.to_thread(
+            stt_stream.transcribe_snapshot,
+            audio,
+            start_sample,
+            is_final,
+        )
+
+        await websocket.send_json(
+            {
+                "type": "transcript_snapshot",
+                "stream_id": stream_id,
+                "timestamp": time.time(),
+                "language": result.language,
+                "audio_start": result.audio_start,
+                "audio_end": result.audio_end,
+                "text": result.text,
+                "segments": [
+                    {
+                        "start": segment.start,
+                        "end": segment.end,
+                        "text": segment.text,
+                        "language": segment.language,
+                    }
+                    for segment in result.segments
+                ],
+                "is_final": result.is_final,
+            }
+        )
+
+    except Exception as exc:
+        print(
+            f"[stt] Snapshot transcription failed "
+            f"stream={stream_id}: {exc}"
+        )
 
 
 # ============================================================================
@@ -730,6 +779,14 @@ async def audio_websocket_endpoint(
         stream_id
     )
 
+    # Independent continuous audio buffer for transcription.
+    # This is intentionally separate from the detector's VAD windows.
+    stt_stream = StreamingTranscriber(
+        sample_rate=SAMPLE_RATE,
+        update_seconds=2.0,
+        context_seconds=12.0,
+    )
+
     window_id = 0
 
     # Once a synthetic-voice alert is triggered, terminate
@@ -743,6 +800,15 @@ async def audio_websocket_endpoint(
         0,
         dtype=np.float32,
     )
+
+    # Absolute source-sample positions corresponding to audio_remainder.
+    audio_remainder_origins = np.empty(
+        0,
+        dtype=np.int64,
+    )
+
+    # Total number of source samples received from this stream.
+    total_input_samples = 0
 
     print(
         f"[audio] Client connected: "
@@ -792,12 +858,38 @@ async def audio_websocket_endpoint(
                     )
                     continue
 
+                # --------------------------------------------------------
+                # Audio stream completion
+                # --------------------------------------------------------
+                if context.get("type") == "audio_end":
+                    final_snapshot = stt_stream.final_input()
+
+                    if final_snapshot is not None:
+                        await transcribe_snapshot_and_send(
+                            websocket,
+                            stream_id,
+                            stt_stream,
+                            final_snapshot,
+                            True,
+                        )
+
+                    stt_stream.reset()
+
+                    await websocket.send_json(
+                        {
+                            "type": "transcript_complete",
+                            "stream_id": stream_id,
+                        }
+                    )
+
+                    continue
+
                 if context.get("type") != "session_context":
                     await websocket.send_json(
                         {
                             "error": (
-                                "Expected session_context JSON "
-                                "or binary PCM16 audio data"
+                                "Expected session_context, "
+                                "audio_end, or binary PCM16 audio data"
                             )
                         }
                     )
@@ -921,8 +1013,47 @@ async def audio_websocket_endpoint(
                 continue
 
             # ----------------------------------------------------------------
+            # Track original source positions.
+            #
+            # These positions refer to the original continuous audio stream,
+            # before VAD removes silence.
+            # ----------------------------------------------------------------
+
+            packet_origin_samples = np.arange(
+                total_input_samples,
+                total_input_samples + len(audio),
+                dtype=np.int64,
+            )
+
+            total_input_samples += len(audio)
+
+            # ----------------------------------------------------------------
+            # Continuous STT input
+            #
+            # Feed original source audio directly to the rolling STT buffer.
+            # Do not feed VAD/detector windows to Whisper.
+            # ----------------------------------------------------------------
+
+            stt_snapshot = stt_stream.feed(
+                audio,
+                int(packet_origin_samples[0]),
+            )
+
+            if stt_snapshot is not None:
+                asyncio.create_task(
+                    transcribe_snapshot_and_send(
+                        websocket,
+                        stream_id,
+                        stt_stream,
+                        stt_snapshot,
+                        False,
+                    )
+                )
+
+            # ----------------------------------------------------------------
             # Add previous incomplete samples
             # ----------------------------------------------------------------
+
 
             if len(audio_remainder) > 0:
 
@@ -932,6 +1063,17 @@ async def audio_websocket_endpoint(
                         audio,
                     )
                 )
+
+                origin_samples = np.concatenate(
+                    (
+                        audio_remainder_origins,
+                        packet_origin_samples,
+                    )
+                )
+
+            else:
+
+                origin_samples = packet_origin_samples
 
             # ----------------------------------------------------------------
             # Determine complete VAD frames
@@ -954,6 +1096,10 @@ async def audio_websocket_endpoint(
                 complete_samples:
             ]
 
+            audio_remainder_origins = origin_samples[
+                complete_samples:
+            ]
+
             # ----------------------------------------------------------------
             # Process complete VAD frames
             # ----------------------------------------------------------------
@@ -965,6 +1111,11 @@ async def audio_websocket_endpoint(
             ):
 
                 frame = audio[
+                    start:
+                    start + VAD_FRAME_SAMPLES
+                ]
+
+                frame_origins = origin_samples[
                     start:
                     start + VAD_FRAME_SAMPLES
                 ]
@@ -984,15 +1135,16 @@ async def audio_websocket_endpoint(
                 # Accumulate speech frame
                 # ------------------------------------------------------------
 
-                windows = accumulator.push(
-                    frame
+                windows = accumulator.push_with_timestamps(
+                    frame,
+                    frame_origins,
                 )
 
                 # ------------------------------------------------------------
                 # Process completed windows
                 # ------------------------------------------------------------
 
-                for audio_window in windows:
+                for audio_window, audio_timestamp_sec in windows:
 
                     # --------------------------------------------------------
                     # Skip completely silent windows
@@ -1033,7 +1185,12 @@ async def audio_websocket_endpoint(
 
                     window_id += 1
 
+                    # Wall-clock timestamp remains unchanged for the existing
+                    # RiskResult/dashboard contract.
                     window_timestamp = time.time()
+
+                    # Source-audio timestamp is used by transcription.
+                    window_audio_timestamp = audio_timestamp_sec
 
                     # --------------------------------------------------------
                     # Validate audio window
@@ -1458,6 +1615,28 @@ async def audio_websocket_endpoint(
                             f"window={window_id}"
                         )
 
+                        # Flush the buffered STT audio before terminating.
+                        # The security decision is unchanged; this only ensures
+                        # the user still receives the latest transcript snapshot.
+                        final_snapshot = stt_stream.final_input()
+
+                        if final_snapshot is not None:
+                            await transcribe_snapshot_and_send(
+                                websocket,
+                                stream_id,
+                                stt_stream,
+                                final_snapshot,
+                                True,
+                            )
+
+                            await websocket.send_json(
+                                {
+                                    "type": "transcript_complete",
+                                    "stream_id": stream_id,
+                                }
+                            )
+
+                        stt_stream.reset()
                         stream_terminated = True
                         break
 
