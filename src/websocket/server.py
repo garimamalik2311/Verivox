@@ -59,6 +59,7 @@ from src.speaker_registry import (
     UnknownSpeakerError,
     parse_speaker_id_from_query,
 )
+from src.transcription import StreamingTranscriber
 
 
 app = FastAPI()
@@ -206,6 +207,61 @@ def calculate_corrected_pitch_change_rate(
             f"pitch change calculation failed: {exc}"
         )
         return 0.0
+
+
+async def transcribe_snapshot_and_send(
+    websocket: WebSocket,
+    stream_id: str,
+    stt_stream: StreamingTranscriber,
+    snapshot: tuple[np.ndarray, int],
+    is_final: bool = False,
+) -> None:
+    """Run Whisper on an immutable audio snapshot and send it to the UI."""
+
+    try:
+        audio, start_sample = snapshot
+
+        result = await asyncio.to_thread(
+            stt_stream.transcribe_snapshot,
+            audio,
+            start_sample,
+            is_final,
+        )
+
+        # Do not emit empty intermediate Whisper snapshots.
+        # This keeps the STT stream transparent to existing
+        # RiskResult/WebSocket consumers while still allowing
+        # a final empty snapshot to be followed by transcript_complete.
+        if not result.text.strip() and not result.segments and not is_final:
+            return
+
+        await websocket.send_json(
+            {
+                "type": "transcript_snapshot",
+                "stream_id": stream_id,
+                "timestamp": time.time(),
+                "language": result.language,
+                "audio_start": result.audio_start,
+                "audio_end": result.audio_end,
+                "text": result.text,
+                "segments": [
+                    {
+                        "start": segment.start,
+                        "end": segment.end,
+                        "text": segment.text,
+                        "language": segment.language,
+                    }
+                    for segment in result.segments
+                ],
+                "is_final": result.is_final,
+            }
+        )
+
+    except Exception as exc:
+        print(
+            f"[stt] Snapshot transcription failed "
+            f"stream={stream_id}: {exc}"
+        )
 
 
 # ============================================================================
@@ -979,6 +1035,14 @@ async def audio_websocket_endpoint(
 
     accumulator = WindowAccumulator()
 
+    # Independent continuous audio buffer for transcription.
+    # This is intentionally separate from the detector's VAD windows.
+    stt_stream = StreamingTranscriber(
+        sample_rate=SAMPLE_RATE,
+        update_seconds=2.0,
+        context_seconds=12.0,
+    )
+
     prosody_buffer = get_prosody_buffer(
         stream_id
     )
@@ -1001,6 +1065,9 @@ async def audio_websocket_endpoint(
         0,
         dtype=np.float32,
     )
+
+    # Absolute source-sample position for the independent STT stream.
+    total_input_samples = 0
 
     print(
         f"[audio] Client connected: "
@@ -1186,6 +1253,20 @@ async def audio_websocket_endpoint(
                 continue
 
             # ----------------------------------------------------------------
+            # Continuous STT input
+            #
+            # Feed original source audio directly to the rolling STT buffer.
+            # Do not feed VAD/detector windows to Whisper.
+            # ----------------------------------------------------------------
+
+            stt_snapshot = stt_stream.feed(
+                audio,
+                int(total_input_samples),
+            )
+
+            total_input_samples += len(audio)
+
+            # ----------------------------------------------------------------
             # Add previous incomplete samples
             # ----------------------------------------------------------------
 
@@ -1211,6 +1292,17 @@ async def audio_websocket_endpoint(
             if complete_samples == 0:
 
                 audio_remainder = audio
+
+                if stt_snapshot is not None:
+                    asyncio.create_task(
+                        transcribe_snapshot_and_send(
+                            websocket,
+                            stream_id,
+                            stt_stream,
+                            stt_snapshot,
+                            False,
+                        )
+                    )
 
                 continue
 
@@ -2048,6 +2140,22 @@ async def audio_websocket_endpoint(
                             f"continuing prosody accumulation only"
                         )
 
+            # ------------------------------------------------------------
+            # Send STT snapshot only after this packet's RiskResults have
+            # been delivered, preventing transcript messages from racing
+            # ahead of the existing RiskResult WebSocket contract.
+            # ------------------------------------------------------------
+            if stt_snapshot is not None:
+                asyncio.create_task(
+                    transcribe_snapshot_and_send(
+                        websocket,
+                        stream_id,
+                        stt_stream,
+                        stt_snapshot,
+                        False,
+                    )
+                )
+
     except WebSocketDisconnect:
 
         print(
@@ -2063,6 +2171,31 @@ async def audio_websocket_endpoint(
         )
 
     finally:
+
+        # Flush any remaining continuous STT audio before stream cleanup.
+        try:
+            final_snapshot = stt_stream.final_input()
+            if final_snapshot is not None:
+                await transcribe_snapshot_and_send(
+                    websocket,
+                    stream_id,
+                    stt_stream,
+                    final_snapshot,
+                    True,
+                )
+                await websocket.send_json(
+                    {
+                        "type": "transcript_complete",
+                        "stream_id": stream_id,
+                    }
+                )
+        except Exception as exc:
+            print(
+                f"[stt] Final transcription flush failed "
+                f"stream={stream_id}: {exc}"
+            )
+        finally:
+            stt_stream.reset()
 
         accumulator.reset()
 

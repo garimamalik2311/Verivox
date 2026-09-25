@@ -49,8 +49,12 @@ function MainApp() {
   const [micStatus, setMicStatus] = useState('Disconnected')
   const [securityTerminated, setSecurityTerminated] = useState(false)
   const [micLevel, setMicLevel] = useState(0)
+  const [transcript, setTranscript] = useState('')
+  const [transcriptLanguage, setTranscriptLanguage] = useState('')
   const [showInspector, setShowInspector] = useState(false)
   const [isLiveMonitoring, setIsLiveMonitoring] = useState(false)
+  const [isFilePlaying, setIsFilePlaying] = useState(false)
+  const [fileName, setFileName] = useState('')
   const [transactionAmountInr, setTransactionAmountInr] = useState('525000')
   const [selectedScenario, setSelectedScenario] = useState('high_value_transaction')
   const [contextConfigured, setContextConfigured] = useState(false)
@@ -70,6 +74,7 @@ function MainApp() {
   const sourceRef = useRef(null)
   const fileIntervalRef = useRef(null)
   const fileStreamActiveRef = useRef(false)
+  const filePlaybackRef = useRef(null)
   const securityTerminatedRef = useRef(false)
   const transactionAmountRef = useRef('525000')
   const selectedScenarioRef = useRef('high_value_transaction')
@@ -143,6 +148,16 @@ function MainApp() {
       try {
         const data = JSON.parse(event.data)
         console.log('RiskResult:', data)
+
+        if (data.type === 'transcript_snapshot') {
+          setTranscript(data.text || '')
+          setTranscriptLanguage(data.language || '')
+          return
+        }
+
+        if (data.type === 'transcript_complete') {
+          return
+        }
 
         if (data.type === 'session_context_ack') {
           console.log('Session context acknowledged:', data)
@@ -525,6 +540,23 @@ function MainApp() {
     setIsLiveMonitoring(next)
   }
 
+  const toggleFilePlayback = async () => {
+    const audio = filePlaybackRef.current
+
+    if (!audio) return
+
+    try {
+      if (audio.paused) {
+        await audio.play()
+      } else {
+        audio.pause()
+      }
+    } catch (error) {
+      console.error('File playback error:', error)
+      setIsFilePlaying(false)
+    }
+  }
+
   /* =========================================================
      AUDIO FILE STREAMING
      ========================================================= */
@@ -542,6 +574,31 @@ function MainApp() {
 
     try {
       stopMicrophoneStream()
+
+      if (filePlaybackRef.current) {
+        filePlaybackRef.current.pause()
+        filePlaybackRef.current.currentTime = 0
+        filePlaybackRef.current = null
+      }
+
+      const playbackUrl = URL.createObjectURL(file)
+      const playbackAudio = new Audio(playbackUrl)
+
+      playbackAudio.onplay = () => {
+        setIsFilePlaying(true)
+      }
+
+      playbackAudio.onpause = () => {
+        setIsFilePlaying(false)
+      }
+
+      playbackAudio.onended = () => {
+        setIsFilePlaying(false)
+        URL.revokeObjectURL(playbackUrl)
+      }
+
+      filePlaybackRef.current = playbackAudio
+      setFileName(file.name)
 
       setInputMode('file')
       setMicStatus(`Preparing: ${file.name}`)
@@ -580,6 +637,12 @@ function MainApp() {
 
         await audioCtx.close()
         return
+      }
+
+      try {
+        await playbackAudio.play()
+      } catch (playbackError) {
+        console.warn('Uploaded audio playback could not start:', playbackError)
       }
 
       const chunkSize = 8000
@@ -1014,6 +1077,11 @@ function MainApp() {
               }}
               contextConfigured={contextConfigured}
               configureSecurityContext={configureSecurityContext}
+              isFilePlaying={isFilePlaying}
+              toggleFilePlayback={toggleFilePlayback}
+              fileName={fileName}
+              transcript={transcript}
+              transcriptLanguage={transcriptLanguage}
             />
           )}
 
