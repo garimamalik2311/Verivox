@@ -18,6 +18,7 @@ import {
   Bell,
   ShieldAlert,
   CheckCircle2,
+  Fingerprint,
   Cpu
 } from 'lucide-react'
 
@@ -203,7 +204,10 @@ export default function Overview({
   selectedScenario,
   setSelectedScenario,
   contextConfigured,
-  configureSecurityContext
+  configureSecurityContext,
+  isFilePlaying,
+  toggleFilePlayback,
+  fileName
 }) {
   const securityNotifications = [
     {
@@ -234,6 +238,10 @@ export default function Overview({
     }
   ]
 
+  // --- Biometric Speaker Verification status derivation ---
+  const hasSpeakerData = selected.speaker_similarity !== undefined && selected.speaker_similarity !== null
+  const speakerMatch = selected.speaker_match
+  const speakerSimilarityPct = hasSpeakerData ? Math.round(Number(selected.speaker_similarity) * 100) : null
   const radius = 50
   const circumference = 2 * Math.PI * radius
   const currentScore = selected.rolling_score || 0
@@ -642,6 +650,25 @@ export default function Overview({
           </span>
           <span>8 kHz</span>
         </div>
+
+        {/* --- Audio Playback Bar: live mic monitor --- */}
+        {inputMode === 'mic' && micStatus === 'Live Mic Streaming...' && (
+          <div className="mt-4">
+            <AudioPlaybackBar label="Live Mic Monitor" isPlaying={isLiveMonitoring} level={micLevel} onToggle={toggleLiveMonitor} />
+          </div>
+        )}
+
+        {/* --- Audio Playback Bar: uploaded file playback --- */}
+        {inputMode === 'file' && fileName && (
+          <div className="mt-4">
+            <AudioPlaybackBar
+              label={`Playing: ${fileName}`}
+              isPlaying={isFilePlaying}
+              level={micLevel}
+              onToggle={toggleFilePlayback}
+            />
+          </div>
+        )}
       </section>
 
       <section className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-[#07111f]/75 p-6 shadow-[0_0_40px_rgba(34,211,238,0.05)] backdrop-blur-xl">
@@ -1060,6 +1087,56 @@ export default function Overview({
               <p className="mt-3 text-[11px] leading-4 text-slate-400">
                 Real-time synchronized dual-model inference latency.
               </p>
+            </div>
+          </div>
+
+          {/* --- Biometric Voiceprint Verification card --- */}
+          <div className={`rounded-xl border p-5 ${
+            !hasSpeakerData
+              ? 'border-verivox-border bg-verivox-cardHover'
+              : speakerMatch
+                ? 'border-emerald-400/30 bg-emerald-400/5'
+                : 'border-verivox-pink/40 bg-verivox-pink/5'
+          }`}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-400">
+                <Fingerprint size={16} className="text-verivox-cyan" />
+                Biometric Voiceprint Verification
+              </div>
+              {!hasSpeakerData ? (
+                <span className="text-[10px] font-mono px-2 py-1 rounded-full bg-verivox-cardHover border border-verivox-border text-slate-400 uppercase">
+                  Awaiting Speech
+                </span>
+              ) : speakerMatch ? (
+                <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-full bg-emerald-400/10 border border-emerald-400/30 text-emerald-400 uppercase">
+                  <CheckCircle2 size={11} /> Verified Authorized Speaker
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-full bg-verivox-pink/10 border border-verivox-pink/40 text-verivox-pink uppercase">
+                  <ShieldAlert size={11} /> Voice Mismatch / Impostor
+                </span>
+              )}
+            </div>
+
+            <div className="flex justify-between gap-4 text-xs mb-2">
+              <span className="text-slate-400">Enrolled Reference</span>
+              <span className="font-mono font-bold text-white text-right">
+                {selected.speaker_id || 'authorized_user'} (demo/real_voice.wav)
+              </span>
+            </div>
+
+            <div className="flex justify-between text-xs mb-1.5">
+              <span className="text-slate-400">Similarity Score</span>
+              <span className="font-mono font-bold text-verivox-cyan">
+                {hasSpeakerData ? `${speakerSimilarityPct}%` : '--'}
+              </span>
+            </div>
+
+            <div className="h-1.5 w-full bg-verivox-border rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${speakerMatch ? 'bg-emerald-400' : 'bg-verivox-pink'}`}
+                style={{ width: hasSpeakerData ? `${Math.min(Math.max(speakerSimilarityPct, 0), 100)}%` : '0%' }}
+              />
             </div>
           </div>
 

@@ -10,6 +10,7 @@ load_dotenv()
 
 import asyncio
 import json
+import os
 import time
 import tempfile
 
@@ -40,6 +41,8 @@ from src.risk_engine.schemas import ModelPrediction, ProsodyAnalysis
 from src.risk_engine.stream_manager import StreamManager
 from src.vad import VoiceActivityDetector
 from src.window_accumulator import WindowAccumulator
+
+from src.file_loader import load_audio_file
 
 # --- Sprint 1B additions ---
 from src.risk_engine.prosody_buffer import (
