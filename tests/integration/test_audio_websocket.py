@@ -60,6 +60,12 @@ async def run_test():
                         f"Backend returned error: {data}"
                     )
 
+                if data.get("type") in {
+                    "transcript_snapshot",
+                    "transcript_complete",
+                }:
+                    continue
+
                 assert data["schema_version"] == "1.0"
                 assert data["stream_id"] == "pytest_audio_001"
 

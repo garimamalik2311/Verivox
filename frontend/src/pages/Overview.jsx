@@ -207,7 +207,9 @@ export default function Overview({
   configureSecurityContext,
   isFilePlaying,
   toggleFilePlayback,
-  fileName
+  fileName,
+  transcript,
+  transcriptLanguage
 }) {
   const securityNotifications = [
     {
@@ -538,6 +540,149 @@ export default function Overview({
           </div>
         </section>
       </div>
+
+      {/* LIVE TRANSCRIPT + AUDIO PLAYBACK */}
+      <section className="relative overflow-hidden rounded-2xl border border-cyan-300/15 bg-[#07111f]/80 shadow-[0_0_40px_rgba(34,211,238,0.06)] backdrop-blur-xl">
+        <div className="grid lg:grid-cols-[1.35fr_0.85fr]">
+
+          {/* TRANSCRIPT PANEL */}
+          <div className="relative border-b border-cyan-300/10 p-5 lg:border-b-0 lg:border-r">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-50" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(103,232,249,0.9)]" />
+                  </span>
+
+                  <h2 className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-white">
+                    <Waves size={17} className="text-cyan-300" />
+                    Live Transcript
+                  </h2>
+                </div>
+
+                <p className="mt-2 text-[10px] font-mono uppercase tracking-[0.16em] text-slate-500">
+                  Streaming speech-to-text • Rolling context
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="rounded-md border border-emerald-400/20 bg-emerald-400/[0.06] px-2 py-1 text-[9px] font-bold font-mono uppercase tracking-wider text-emerald-300">
+                  LIVE
+                </span>
+
+                {transcriptLanguage && (
+                  <span className="rounded-md border border-cyan-300/20 bg-cyan-400/[0.07] px-2 py-1 text-[9px] font-bold font-mono uppercase tracking-wider text-cyan-200">
+                    {transcriptLanguage}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="relative mt-5 min-h-[142px] overflow-hidden rounded-xl border border-cyan-300/10 bg-black/35">
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent" />
+
+              <div className="absolute left-3 top-3 flex items-center gap-2 text-[9px] font-mono uppercase tracking-widest text-slate-600">
+                <span className="h-1 w-1 rounded-full bg-cyan-300" />
+                Voice stream
+              </div>
+
+              <div className="relative max-h-[142px] overflow-y-auto px-4 pb-4 pt-9 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-cyan-300/10">
+                {transcript ? (
+                  <p className="whitespace-pre-wrap text-[13px] leading-7 font-mono text-slate-200">
+                    {transcript}
+                  </p>
+                ) : (
+                  <div className="flex min-h-[82px] items-center">
+                    <p className="text-xs font-mono text-slate-600">
+                      Waiting for speech...
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/50 to-transparent" />
+            </div>
+          </div>
+
+          {/* AUDIO PLAYBACK PANEL */}
+          <div className="relative p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-bold font-mono uppercase tracking-[0.18em] text-cyan-300/70">
+                  Audio Playback
+                </p>
+                <h3 className="mt-1 truncate text-sm font-semibold text-white">
+                  {fileName || 'No audio loaded'}
+                </h3>
+              </div>
+
+              <span
+                className={`rounded-md border px-2 py-1 text-[9px] font-bold font-mono uppercase tracking-wider ${
+                  isFilePlaying
+                    ? 'border-cyan-300/30 bg-cyan-400/[0.08] text-cyan-200'
+                    : 'border-slate-500/20 bg-slate-500/[0.05] text-slate-500'
+                }`}
+              >
+                {isFilePlaying ? 'PLAYING' : 'READY'}
+              </span>
+            </div>
+
+            {/* WAVEFORM */}
+            <div className="relative mt-5 h-[92px] overflow-hidden rounded-xl border border-cyan-300/10 bg-black/40 px-3">
+              <div className="absolute inset-x-0 top-1/2 h-px bg-cyan-300/10" />
+
+              <div className="relative flex h-full items-center justify-between gap-[3px]">
+                {Array.from({ length: 48 }).map((_, index) => {
+                  const activeLevel = isFilePlaying ? Math.max(Number(micLevel) || 0, 8) : 5
+                  const waveShape =
+                    0.22 +
+                    Math.abs(Math.sin(index * 0.63)) * 0.48 +
+                    Math.abs(Math.cos(index * 0.19)) * 0.22
+                  const height = Math.max(
+                    4,
+                    Math.min(78, activeLevel * waveShape * (isFilePlaying ? 0.72 : 0.22))
+                  )
+
+                  return (
+                    <span
+                      key={index}
+                      className={`w-full max-w-[4px] rounded-full transition-all duration-150 ${
+                        isFilePlaying
+                          ? 'bg-cyan-300 shadow-[0_0_8px_rgba(103,232,249,0.45)]'
+                          : 'bg-slate-700'
+                      }`}
+                      style={{
+                        height: `${height}px`,
+                        opacity: isFilePlaying ? 0.45 + (index % 5) * 0.1 : 0.45
+                      }}
+                    />
+                  )
+                })}
+              </div>
+
+              {isFilePlaying && (
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-cyan-400/[0.03] via-transparent to-cyan-400/[0.03]" />
+              )}
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-[9px] font-mono uppercase tracking-wider text-slate-600">
+              <span>{isFilePlaying ? 'Live playback signal' : 'Playback idle'}</span>
+              <span>{isFilePlaying ? `${Math.round(Number(micLevel) || 0)}% level` : '—'}</span>
+            </div>
+
+            <div className="mt-4">
+              <AudioPlaybackBar
+                label={fileName ? `Playback: ${fileName}` : 'Upload audio to enable playback'}
+                isPlaying={isFilePlaying}
+                level={micLevel}
+                onToggle={toggleFilePlayback}
+                disabled={!fileName}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
 
       <LiveGraph
         timeSeries={selected.timeSeries}
